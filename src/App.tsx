@@ -186,13 +186,21 @@ export default function App() {
       return;
     }
 
-    // Set processing BEFORE any async operations
+    console.log('🔄 Moving to step 2 and starting OCR');
+    
+    // CRITICAL: Move to step 2 FIRST
+    setStep(2);
+    
+    // Wait for React to render step 2
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    // NOW set processing - this will show the loading screen on step 2
     setIsProcessing(true);
 
     try {
       console.log('Starting OCR...');
       
-      // Convert file to base64 (single read for both preview and OCR)
+      // Convert file to base64
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
@@ -200,10 +208,10 @@ export default function App() {
         reader.readAsDataURL(file);
       });
 
-      // Set preview image
+      console.log('📷 Image converted');
       setUploadedImage(base64);
 
-      // Call our serverless function
+      console.log('🌐 Calling OCR API...');
       const response = await fetch('/api/ocr', {
         method: 'POST',
         headers: {
@@ -213,9 +221,8 @@ export default function App() {
       });
 
       const result = await response.json();
+      console.log('✅ OCR complete');
       
-      console.log('OCR result:', result);
-
       if (result.IsErroredOnProcessing) {
         throw new Error(result.ErrorMessage || 'OCR failed');
       }
@@ -236,14 +243,15 @@ export default function App() {
         setItems(parsedItems);
       }
       
-      setStep(2);
+      // Don't call setStep(2) here - we're already on step 2!
       
     } catch (err) {
       console.error('OCR Error:', err);
       setError('OCR failed. Please add items manually.');
       setItems([]);
-      setStep(2);
+      // Keep on step 2 even if error
     } finally {
+      console.log('🔄 Stopping loading');
       setIsProcessing(false);
       setOcrProgress(0);
     }
