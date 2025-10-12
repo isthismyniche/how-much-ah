@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
 import { Upload, ArrowLeft, Check, AlertCircle, Trash2 } from 'lucide-react';
 
-// OCR.space API key - replace with your own from https://ocr.space/ocrapi
-const OCR_API_KEY = 'K84997741488957';  // ← PUT YOUR API KEY HERE
-
 interface ReceiptItem {
   id: string;
   name: string;
@@ -178,20 +175,17 @@ export default function App() {
     setError('');
     setOcrProgress(0);
 
-    // Validate file type
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
     if (!validTypes.includes(file.type)) {
       setError('Please upload JPG or PNG');
       return;
     }
 
-    // Validate file size
     if (file.size > 10 * 1024 * 1024) {
       setError('File must be under 10MB');
       return;
     }
 
-    // Create image preview
     const reader = new FileReader();
     reader.onload = (e) => {
       setUploadedImage(e.target?.result as string);
@@ -201,28 +195,27 @@ export default function App() {
     setIsProcessing(true);
 
     try {
-      console.log('Starting OCR with OCR.space...');
+      console.log('Starting OCR...');
       
-      // Prepare form data for OCR.space API
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('apikey', OCR_API_KEY);
-      formData.append('language', 'eng');
-      formData.append('isOverlayRequired', 'false');
-      formData.append('detectOrientation', 'true');
-      formData.append('scale', 'true');
-      formData.append('OCREngine', '2'); // Engine 2 is better for receipts
-      formData.append('isTable', 'true'); // ← ADD THIS: Enable table/column detection
+      // Convert file to base64
+      const base64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
 
-      // Call OCR.space API
-      const response = await fetch('https://api.ocr.space/parse/image', {
+      // Call our serverless function instead of OCR.space directly
+      const response = await fetch('/api/ocr', {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageData: base64 }),
       });
 
       const result = await response.json();
       
-      console.log('OCR.space result:', result);
+      console.log('OCR result:', result);
 
       if (result.IsErroredOnProcessing) {
         throw new Error(result.ErrorMessage || 'OCR failed');
@@ -235,7 +228,6 @@ export default function App() {
       const extractedText = result.ParsedResults[0].ParsedText;
       console.log('📝 OCR Text:', extractedText);
 
-      // Parse the text
       const parsedItems = parseReceiptText(extractedText);
 
       if (parsedItems.length === 0) {
