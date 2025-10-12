@@ -186,25 +186,24 @@ export default function App() {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setUploadedImage(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
-
+    // Set processing BEFORE any async operations
     setIsProcessing(true);
 
     try {
       console.log('Starting OCR...');
       
-      // Convert file to base64
-      const base64 = await new Promise<string>((resolve) => {
+      // Convert file to base64 (single read for both preview and OCR)
+      const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
         reader.readAsDataURL(file);
       });
 
-      // Call our serverless function instead of OCR.space directly
+      // Set preview image
+      setUploadedImage(base64);
+
+      // Call our serverless function
       const response = await fetch('/api/ocr', {
         method: 'POST',
         headers: {
