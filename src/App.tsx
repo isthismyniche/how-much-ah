@@ -172,47 +172,41 @@ export default function App() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
+  
     setError('');
     setOcrProgress(0);
-
+  
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
     if (!validTypes.includes(file.type)) {
       setError('Please upload JPG or PNG');
       return;
     }
-
+  
     if (file.size > 10 * 1024 * 1024) {
       setError('File must be under 10MB');
       return;
     }
-
-    console.log('🔄 Moving to step 2 and starting OCR');
-    
+  
     setStep(2);
     await new Promise(resolve => setTimeout(resolve, 50));
     setIsProcessing(true);
-
+  
     try {
-      console.log('Starting OCR...');
-      console.log('Original file size:', (file.size / 1024 / 1024).toFixed(2), 'MB');
-      
-      // Compress image for faster upload and processing
+      // More aggressive compression for OCR
       const options = {
-        maxSizeMB: 0.5,          // Max 1MB
-        maxWidthOrHeight: 1500, // Max dimension
+        maxSizeMB: 0.5,
+        maxWidthOrHeight: 1500,
         useWebWorker: true,
         fileType: 'image/jpeg',
         initialQuality: 0.7
       };
       
-      console.log('Compressing image...');
       const compressedFile = await imageCompression(file, options);
-      console.log('Compressed file size:', (compressedFile.size / 1024 / 1024).toFixed(2), 'MB');
       
-      // IMPORTANT: Check if still too large after compression
-      if (compressedFile.size > 1000000) { // 1MB in bytes
-        console.warn('Still too large after compression, compressing again...');
+      let finalFile = compressedFile;
+      
+      // If still too large, compress again
+      if (compressedFile.size > 1000000) {
         const options2 = {
           maxSizeMB: 0.3,
           maxWidthOrHeight: 1200,
@@ -220,28 +214,25 @@ export default function App() {
           fileType: 'image/jpeg',
           initialQuality: 0.6
         };
-        const recompressed = await imageCompression(compressedFile, options2);
-        console.log('Re-compressed file size:', (recompressed.size / 1024 / 1024).toFixed(2), 'MB');
-
+        finalFile = await imageCompression(compressedFile, options2);
+      }
+      
       // Convert compressed file to base64
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
         reader.onerror = reject;
-        reader.readAsDataURL(recompressed);
+        reader.readAsDataURL(finalFile);
       });
-
-      console.log('📷 Image converted');
       
-      // Set original image for preview (not compressed)
+      // Set original image for preview
       const originalBase64 = await new Promise<string>((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
         reader.readAsDataURL(file);
       });
       setUploadedImage(originalBase64);
-
-      console.log('🌐 Calling OCR API...');
+  
       const response = await fetch('/api/ocr', {
         method: 'POST',
         headers: {
@@ -249,27 +240,25 @@ export default function App() {
         },
         body: JSON.stringify({ imageData: base64 }),
       });
-
+  
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
       }
-
+  
       const result = await response.json();
-      console.log('✅ OCR complete');
       
       if (result.IsErroredOnProcessing) {
         throw new Error(result.ErrorMessage || 'OCR failed');
       }
-
+  
       if (!result.ParsedResults || result.ParsedResults.length === 0) {
         throw new Error('No text found in image');
       }
-
+  
       const extractedText = result.ParsedResults[0].ParsedText;
-      console.log('📝 OCR Text:', extractedText);
-
+  
       const parsedItems = parseReceiptText(extractedText);
-
+  
       if (parsedItems.length === 0) {
         setError('No items found. Add manually below.');
         setItems([]);
@@ -278,16 +267,14 @@ export default function App() {
       }
       
     } catch (err) {
-      console.error('OCR Error:', err);
       setError(`OCR failed: ${err instanceof Error ? err.message : 'Unknown error'}. Please add items manually.`);
       setItems([]);
     } finally {
-      console.log('🔄 Stopping loading');
       setIsProcessing(false);
       setOcrProgress(0);
     }
   };
-
+  
   const addPerson = () => {
     const trimmedName = newPersonName.trim();
     if (!trimmedName) return;
