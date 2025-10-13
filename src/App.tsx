@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Upload, ArrowLeft, Check, AlertCircle, Trash2 } from 'lucide-react';
+import imageCompression from 'browser-image-compression';
 
 interface ReceiptItem {
   id: string;
@@ -188,28 +189,43 @@ export default function App() {
 
     console.log('🔄 Moving to step 2 and starting OCR');
     
-    // CRITICAL: Move to step 2 FIRST
     setStep(2);
-    
-    // Wait for React to render step 2
     await new Promise(resolve => setTimeout(resolve, 50));
-    
-    // NOW set processing - this will show the loading screen on step 2
     setIsProcessing(true);
 
     try {
       console.log('Starting OCR...');
+      console.log('Original file size:', (file.size / 1024 / 1024).toFixed(2), 'MB');
       
-      // Convert file to base64
+      // Compress image for faster upload and processing
+      const options = {
+        maxSizeMB: 1,          // Max 1MB
+        maxWidthOrHeight: 2000, // Max dimension
+        useWebWorker: true,
+        fileType: 'image/jpeg'
+      };
+      
+      console.log('Compressing image...');
+      const compressedFile = await imageCompression(file, options);
+      console.log('Compressed file size:', (compressedFile.size / 1024 / 1024).toFixed(2), 'MB');
+      
+      // Convert compressed file to base64
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
         reader.onerror = reject;
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(compressedFile);
       });
 
       console.log('📷 Image converted');
-      setUploadedImage(base64);
+      
+      // Set original image for preview (not compressed)
+      const originalBase64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
+      setUploadedImage(originalBase64);
 
       console.log('🌐 Calling OCR API...');
       const response = await fetch('/api/ocr', {
@@ -219,6 +235,10 @@ export default function App() {
         },
         body: JSON.stringify({ imageData: base64 }),
       });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
 
       const result = await response.json();
       console.log('✅ OCR complete');
@@ -243,13 +263,10 @@ export default function App() {
         setItems(parsedItems);
       }
       
-      // Don't call setStep(2) here - we're already on step 2!
-      
     } catch (err) {
       console.error('OCR Error:', err);
-      setError('OCR failed. Please add items manually.');
+      setError(`OCR failed: ${err instanceof Error ? err.message : 'Unknown error'}. Please add items manually.`);
       setItems([]);
-      // Keep on step 2 even if error
     } finally {
       console.log('🔄 Stopping loading');
       setIsProcessing(false);
