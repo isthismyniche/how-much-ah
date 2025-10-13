@@ -274,7 +274,7 @@ export default function App() {
       setOcrProgress(0);
     }
   };
-  
+
   const addPerson = () => {
     const trimmedName = newPersonName.trim();
     if (!trimmedName) return;
@@ -566,15 +566,15 @@ export default function App() {
                     </div>
                     <div className="space-y-2">
                       {items.map(item => (
-                        <div key={item.id} className="flex gap-2">
+                        <div key={item.id} className="flex gap-2 items-center">
                           <input
                             type="text"
                             value={item.name}
                             onChange={(e) => updateItem(item.id, 'name', e.target.value)}
                             placeholder="Item name"
-                            className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-gray-900"
+                            className="flex-1 min-w-0 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-gray-900"
                           />
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1 flex-shrink-0">
                             <span className="text-gray-600">$</span>
                             <input
                               type="number"
@@ -583,23 +583,20 @@ export default function App() {
                               onBlur={(e) => {
                                 const val = parseFloat(e.target.value);
                                 if (!isNaN(val) && val > 0) {
-                                  // Force 2 decimal places
                                   updateItem(item.id, 'price', parseFloat(val.toFixed(2)));
-                                  // Update the input display to show 2dp
                                   e.target.value = val.toFixed(2);
                                 } else if (e.target.value === '' || val === 0) {
-                                  // If empty or 0, set to 0.00
                                   updateItem(item.id, 'price', 0);
                                 }
                               }}
                               placeholder="0.00"
                               step="0.01"
-                              className="w-24 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-gray-900"
+                              className="w-20 px-2 py-2 border rounded-lg focus:ring-2 focus:ring-gray-900"
                             />
                           </div>
                           <button
                             onClick={() => deleteItem(item.id)}
-                            className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                            className="flex-shrink-0 p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
                             aria-label="Delete item"
                           >
                             <Trash2 className="w-5 h-5" />
