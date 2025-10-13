@@ -199,22 +199,36 @@ export default function App() {
       
       // Compress image for faster upload and processing
       const options = {
-        maxSizeMB: 1,          // Max 1MB
-        maxWidthOrHeight: 2000, // Max dimension
+        maxSizeMB: 0.5,          // Max 1MB
+        maxWidthOrHeight: 1500, // Max dimension
         useWebWorker: true,
-        fileType: 'image/jpeg'
+        fileType: 'image/jpeg',
+        initialQuality: 0.7
       };
       
       console.log('Compressing image...');
       const compressedFile = await imageCompression(file, options);
       console.log('Compressed file size:', (compressedFile.size / 1024 / 1024).toFixed(2), 'MB');
       
+      // IMPORTANT: Check if still too large after compression
+      if (compressedFile.size > 1000000) { // 1MB in bytes
+        console.warn('Still too large after compression, compressing again...');
+        const options2 = {
+          maxSizeMB: 0.3,
+          maxWidthOrHeight: 1200,
+          useWebWorker: true,
+          fileType: 'image/jpeg',
+          initialQuality: 0.6
+        };
+        const recompressed = await imageCompression(compressedFile, options2);
+        console.log('Re-compressed file size:', (recompressed.size / 1024 / 1024).toFixed(2), 'MB');
+
       // Convert compressed file to base64
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
         reader.onerror = reject;
-        reader.readAsDataURL(compressedFile);
+        reader.readAsDataURL(recompressed);
       });
 
       console.log('📷 Image converted');
