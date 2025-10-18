@@ -372,64 +372,6 @@ export default function App() {
     return receipts.reduce((sum, receipt) => sum + calculateReceiptTotal(receipt), 0);
   };
 
-  const calculatePersonTotals = (): PersonCalculation[] => {
-    const calculations = people.map(person => {
-      let subtotal = 0;
-      let scAmount = 0;
-      let gstAmount = 0;
-      const personItems: { name: string; amount: number; percentage?: number; receiptNum?: number }[] = [];
-      
-      receipts.forEach((receipt, receiptIndex) => {
-        let receiptSubtotal = 0;
-        
-        receipt.items.forEach(item => {
-          if (item.assignedTo.includes(person.name)) {
-            const shareCount = item.assignedTo.length;
-            const shareAmount = item.price / shareCount;
-            receiptSubtotal += shareAmount;
-            
-            personItems.push({
-              name: item.name,
-              amount: shareAmount,
-              percentage: shareCount > 1 ? Math.round(100 / shareCount) : undefined,
-              receiptNum: receipts.length > 1 ? receiptIndex + 1 : undefined
-            });
-          }
-        });
-        
-        subtotal += receiptSubtotal;
-        
-        if (receipt.serviceChargeEnabled) {
-          scAmount += receiptSubtotal * (receipt.serviceChargePercent / 100);
-        }
-        
-        if (receipt.gstEnabled) {
-          const receiptScAmount = receipt.serviceChargeEnabled 
-            ? receiptSubtotal * (receipt.serviceChargePercent / 100)
-            : 0;
-          gstAmount += (receiptSubtotal + receiptScAmount) * (receipt.gstPercent / 100);
-        }
-      });
-      
-      return {
-        name: person.name,
-        subtotal,
-        scAmount,
-        gstAmount,
-        total: subtotal + scAmount + gstAmount,
-        items: personItems
-      };
-    });
-
-    const diff = calculateGrandTotal() - calculations.reduce((s, c) => s + c.total, 0);
-    if (Math.abs(diff) > 0.01) {
-      const personWithItems = calculations.find(c => c.items.length > 0);
-      if (personWithItems) personWithItems.total += diff;
-    }
-
-    return calculations;
-  };
-
   const validateStep3 = (): boolean => {
     if (!currentReceipt.payer) {
       setError('Please select who paid');
