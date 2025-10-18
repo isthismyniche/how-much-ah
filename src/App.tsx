@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Upload, ArrowLeft, Check, AlertCircle, Trash2 } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
+import { useEffect } from 'react';
+import { initGA, tracking } from './analytics';
 
 interface ReceiptItem {
   id: string;
@@ -25,6 +27,9 @@ interface Receipt {
 }
 
 export default function App() {
+  useEffect(() => {
+    initGA();
+  }, [])
   const [step, setStep] = useState(1);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [currentReceiptIndex, setCurrentReceiptIndex] = useState(0);
@@ -34,6 +39,11 @@ export default function App() {
   const [ocrProgress, setOcrProgress] = useState(0);
   const [error, setError] = useState('');
   const [showCopyConfirm, setShowCopyConfirm] = useState(false);
+
+  const setStepWithTracking = (newStep: number) => {
+    setStep(newStep);
+    tracking.reachedStep(newStep);
+  };
 
   const getCurrentReceipt = (): Receipt => {
     if (receipts[currentReceiptIndex]) {
@@ -182,11 +192,12 @@ export default function App() {
     }
   
     if (step === 1) {
-      setStep(2);
+      setStepWithTracking(2);
       await new Promise(resolve => setTimeout(resolve, 50));
     }
     setIsProcessing(true);
-  
+    tracking.ocrStarted();
+
     try {
       const options = {
         maxSizeMB: 0.5,
@@ -252,14 +263,18 @@ export default function App() {
       const parsedItems = parseReceiptText(extractedText);
   
       if (parsedItems.length === 0) {
+        tracking.ocrFailed('No items found');
         setError('No items found. Add manually below.');
         updateCurrentReceipt({ items: [] });
       } else {
+        tracking.ocrSuccess(parsedItems.length);
         updateCurrentReceipt({ items: parsedItems });
       }
       
     } catch (err) {
-      setError(`OCR failed: ${err instanceof Error ? err.message : 'Unknown error'}. Please add items manually.`);
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      tracking.ocrFailed(errorMsg);
+      setError(`OCR failed: ${errorMsg}. Please add items manually.`);
       updateCurrentReceipt({ items: [] });
     } finally {
       setIsProcessing(false);
@@ -276,7 +291,9 @@ export default function App() {
       return;
     }
     
-    setPeople([...people, { name: trimmedName }]);
+    const newPeople = [...people, { name: trimmedName }];
+    setPeople(newPeople);
+    tracking.personAdded(newPeople.length);
     setNewPersonName('');
     setError('');
   };
@@ -301,6 +318,7 @@ export default function App() {
   };
 
   const addItem = () => {
+    tracking.itemAddedManually();
     updateCurrentReceipt({
       items: [...currentReceipt.items, {
         id: `manual-${Date.now()}`,
@@ -320,6 +338,7 @@ export default function App() {
   };
 
   const deleteItem = (id: string) => {
+    tracking.itemDeleted();
     updateCurrentReceipt({
       items: currentReceipt.items.filter(item => item.id !== id)
     });
@@ -330,11 +349,17 @@ export default function App() {
       items: currentReceipt.items.map(item => {
         if (item.id !== itemId) return item;
         const isAssigned = item.assignedTo.includes(personName);
+        const newAssignedTo = isAssigned
+          ? item.assignedTo.filter(p => p !== personName)
+          : [...item.assignedTo, personName];
+        
+        if (!isAssigned) {
+          tracking.itemAssigned(newAssignedTo.length);
+        }
+        
         return {
           ...item,
-          assignedTo: isAssigned
-            ? item.assignedTo.filter(p => p !== personName)
-            : [...item.assignedTo, personName]
+          assignedTo: newAssignedTo
         };
       })
     });
@@ -389,14 +414,15 @@ export default function App() {
       return;
     }
     
+    tracking.receiptAdded(receipts.length + 1);
     setCurrentReceiptIndex(receipts.length);
-    setStep(2);
+    setStepWithTracking(2);
     setError('');
   };
 
   const navigateToReceipt = (index: number) => {
     setCurrentReceiptIndex(index);
-    setStep(2);
+    setStepWithTracking(2);
     setError('');
   };
 
@@ -569,6 +595,7 @@ export default function App() {
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(generateSummaryText());
+    tracking.summaryCopied();
     setShowCopyConfirm(true);
     setTimeout(() => setShowCopyConfirm(false), 2000);
   };
@@ -594,6 +621,7 @@ export default function App() {
             className="text-4xl font-bold text-gray-900 mb-2 cursor-pointer hover:text-gray-700 transition"
             onClick={() => {
               if (window.confirm('Start over? This will clear all data.')) {
+                tracking.startedOver();
                 setStep(1);
                 setReceipts([]);
                 setCurrentReceiptIndex(0);
@@ -667,8 +695,11 @@ export default function App() {
                 </label>
                 
                 <button
-                  onClick={() => setStep(2)}
-                  className="px-6 py-3 text-gray-700 border rounded-lg hover:bg-gray-50 transition"
+                    onClick={() => {
+                      tracking.skippedOCR();
+                      setStepWithTracking(2);
+                    }}
+                    className="px-6 py-3 text-gray-700 border rounded-lg hover:bg-gray-50 transition"
                 >
                   Skip - Enter Manually
                 </button>
@@ -689,7 +720,7 @@ export default function App() {
                 <div className="text-center py-12">
                   <div className="animate-spin w-12 h-12 border-4 border-gray-300 border-t-gray-900 rounded-full mx-auto mb-4"></div>
                   <p className="text-gray-600 font-medium">Reading receipt...</p>
-                  <p className="text-sm text-gray-500 mt-2">Using Sparse Text mode - Up to 10 seconds</p>
+                  <p className="text-sm text-gray-500 mt-2">Using a free OCR service -- up to 10 seconds</p>
                   {ocrProgress > 0 && (
                     <div className="mt-4 max-w-xs mx-auto">
                       <div className="w-full bg-gray-200 rounded-full h-2">
@@ -827,7 +858,10 @@ export default function App() {
                           type="checkbox"
                           id="sc"
                           checked={currentReceipt.serviceChargeEnabled}
-                          onChange={(e) => updateCurrentReceipt({ serviceChargeEnabled: e.target.checked })}
+                          onChange={(e) => {
+                            updateCurrentReceipt({ serviceChargeEnabled: e.target.checked });
+                            tracking.serviceChargeToggled(e.target.checked);
+                          }}
                           className="w-4 h-4"
                         />
                         <label htmlFor="sc" className="flex-1">Service Charge</label>
@@ -845,7 +879,10 @@ export default function App() {
                           type="checkbox"
                           id="gst"
                           checked={currentReceipt.gstEnabled}
-                          onChange={(e) => updateCurrentReceipt({ gstEnabled: e.target.checked })}
+                          onChange={(e) => {
+                            updateCurrentReceipt({ gstEnabled: e.target.checked });
+                            tracking.gstToggled(e.target.checked);
+                          }}
                           className="w-4 h-4"
                         />
                         <label htmlFor="gst" className="flex-1">GST</label>
@@ -887,7 +924,7 @@ export default function App() {
                       }
                       setError('');
                       updateCurrentReceipt({ payer: currentReceipt.payer });
-                      setStep(3);
+                      setStepWithTracking(3);
                     }}
                     className="w-full px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
                   >
@@ -921,11 +958,11 @@ export default function App() {
                 </div>
               )}
               <div className="flex gap-3">
-                <button onClick={() => setStep(2)} className="px-6 py-3 border rounded-lg hover:bg-gray-50">
+                <button onClick={() => setStepWithTracking(2)} className="px-6 py-3 border rounded-lg hover:bg-gray-50">
                   Back
                 </button>
                 <button
-                  onClick={() => validateStep3() && setStep(4)}
+                  onClick={() => validateStep3() && setStepWithTracking(4)}
                   className="flex-1 px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
                 >
                   Next: Assign Items
@@ -978,7 +1015,7 @@ export default function App() {
                 </div>
               )}
               <div className="flex gap-3">
-                <button onClick={() => setStep(3)} className="px-6 py-3 border rounded-lg hover:bg-gray-50">
+                <button onClick={() => setStepWithTracking(3)} className="px-6 py-3 border rounded-lg hover:bg-gray-50">
                   Back
                 </button>
                 <div className="flex-1 flex gap-3">
@@ -994,7 +1031,13 @@ export default function App() {
                     </button>
                   )}
                   <button
-                    onClick={() => validateStep4() && setStep(5)}
+                    onClick={() => {
+                      if (validateStep4()) {
+                        const totalAmount = calculateReceiptTotal(currentReceipt);
+                        tracking.summaryGenerated(receipts.length, totalAmount);
+                        setStepWithTracking(5);
+                      }
+                    }}                    
                     className="flex-1 px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
                   >
                     Generate Summary
@@ -1012,7 +1055,7 @@ export default function App() {
               </div>
               <div className="flex gap-3">
                 <button
-                  onClick={() => setStep(4)}
+                  onClick={() => setStepWithTracking(4)}
                   className="px-6 py-3 border rounded-lg hover:bg-gray-50 flex items-center gap-2"
                 >
                   <ArrowLeft className="w-4 h-4" />
