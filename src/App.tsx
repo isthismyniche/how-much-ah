@@ -13,36 +13,69 @@ interface Person {
   name: string;
 }
 
+interface Receipt {
+  id: string;
+  items: ReceiptItem[];
+  payer: string;
+  serviceChargeEnabled: boolean;
+  serviceChargePercent: number;
+  gstEnabled: boolean;
+  gstPercent: number;
+  uploadedImage: string;
+}
+
 interface PersonCalculation {
   name: string;
   subtotal: number;
   scAmount: number;
   gstAmount: number;
   total: number;
-  items: { name: string; amount: number; percentage?: number }[];
+  items: { name: string; amount: number; percentage?: number; receiptNum?: number }[];
 }
 
 export default function App() {
   const [step, setStep] = useState(1);
-  const [items, setItems] = useState<ReceiptItem[]>([]);
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [currentReceiptIndex, setCurrentReceiptIndex] = useState(0);
   const [people, setPeople] = useState<Person[]>([]);
   const [newPersonName, setNewPersonName] = useState('');
-  const [serviceChargeEnabled, setServiceChargeEnabled] = useState(false);
-  const [serviceChargePercent, setServiceChargePercent] = useState(10);
-  const [gstEnabled, setGstEnabled] = useState(false);
-  const [gstPercent, setGstPercent] = useState(9);
-  const [payer, setPayer] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
-  const [uploadedImage, setUploadedImage] = useState<string>('');
   const [error, setError] = useState('');
   const [showCopyConfirm, setShowCopyConfirm] = useState(false);
+
+  // Get current receipt or create a new one
+  const getCurrentReceipt = (): Receipt => {
+    if (receipts[currentReceiptIndex]) {
+      return receipts[currentReceiptIndex];
+    }
+    return {
+      id: `receipt-${Date.now()}`,
+      items: [],
+      payer: '',
+      serviceChargeEnabled: false,
+      serviceChargePercent: 10,
+      gstEnabled: false,
+      gstPercent: 9,
+      uploadedImage: ''
+    };
+  };
+
+  const currentReceipt = getCurrentReceipt();
+
+  const updateCurrentReceipt = (updates: Partial<Receipt>) => {
+    const newReceipts = [...receipts];
+    if (newReceipts[currentReceiptIndex]) {
+      newReceipts[currentReceiptIndex] = { ...newReceipts[currentReceiptIndex], ...updates };
+    } else {
+      newReceipts[currentReceiptIndex] = { ...getCurrentReceipt(), ...updates };
+    }
+    setReceipts(newReceipts);
+  };
 
   const parseReceiptText = (text: string): ReceiptItem[] => {
     const items: ReceiptItem[] = [];
     const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-    
-    console.log('🔍 Parsing lines:', lines);
     
     const excludeTerms = [
       'total', 'subtotal', 'tax', 'gst', 'service', 'charge', 'svr', 'chrg',
@@ -59,113 +92,84 @@ export default function App() {
     lines.forEach((line, index) => {
       if (line.length < 2) return;
       
-      console.log(`\nLine ${index}: "${line}"`);
-      
       if (shouldExclude(line)) {
-        console.log(`  ❌ Excluded (matches exclude term)`);
         return;
       }
       
-      // Find all prices in line
       const priceMatches = line.match(/\$?\d+\.\d{2}/g);
       
       let bestPrice = null;
       let bestPriceValue = 0;
       
       if (priceMatches) {
-        // Take the last price (usually the item total)
         for (let i = priceMatches.length - 1; i >= 0; i--) {
           const price = parseFloat(priceMatches[i].replace('$', ''));
           if (price > 0 && price < 1000) {
             bestPrice = priceMatches[i];
             bestPriceValue = price;
-            console.log(`  💰 Price: $${price.toFixed(2)}`);
             break;
           }
         }
       }
       
-      // Extract potential item name
       let itemName = line;
       
-      // Remove prices
       if (priceMatches) {
         priceMatches.forEach(p => itemName = itemName.replace(p, ''));
       }
       
-      // Clean up the name
-      itemName = itemName.replace(/^\d+\s+/, '');        // Remove "1 " prefix
-      itemName = itemName.replace(/^\d+\.\s*/, '');      // Remove "1." prefix
-      itemName = itemName.replace(/^[\*\-\+\#]+\s*/, ''); // Remove symbols
-      itemName = itemName.replace(/\+{2,}/g, '');        // Remove "+++"
-      itemName = itemName.replace(/\.{2,}/g, '');        // Remove "...."
-      itemName = itemName.replace(/\s+/g, ' ').trim();   // Clean spaces
+      itemName = itemName.replace(/^\d+\s+/, '');
+      itemName = itemName.replace(/^\d+\.\s*/, '');
+      itemName = itemName.replace(/^[\*\-\+\#]+\s*/, '');
+      itemName = itemName.replace(/\+{2,}/g, '');
+      itemName = itemName.replace(/\.{2,}/g, '');
+      itemName = itemName.replace(/\s+/g, ' ').trim();
       
-      // Check if this is a standalone price line
       const isStandalonePriceLine = /^\$?\d+\.\d{2}$/.test(line.trim());
-      
-      // Check if line starts with a quantity number (strong indicator of an item)
       const startsWithQuantity = /^\d+\s+[A-Z]/.test(line);
       
       let shouldAdd = false;
       let finalName = '';
       let finalPrice = 0;
-      let reason = '';
       
-      // PRIORITY 1: Line has quantity + name + price
       if (startsWithQuantity && itemName.length >= 2 && bestPrice && bestPriceValue > 0) {
         shouldAdd = true;
         finalName = itemName;
         finalPrice = bestPriceValue;
-        reason = 'Qty + Name + Price';
       }
-      // PRIORITY 2: Line has name + price (no quantity, but has both)
       else if (!startsWithQuantity && itemName.length >= 3 && bestPrice && bestPriceValue > 0 && !shouldExclude(itemName)) {
         shouldAdd = true;
         finalName = itemName;
         finalPrice = bestPriceValue;
-        reason = 'Name + Price';
       }
-      // PRIORITY 3: Standalone price (just "$12.00" on its own line)
       else if (isStandalonePriceLine && bestPriceValue > 0 && bestPriceValue < 100) {
         shouldAdd = true;
         finalName = 'Item';
         finalPrice = bestPriceValue;
-        reason = 'Standalone price';
       }
-      // PRIORITY 4: Line starts with quantity + has name (add with $0.00)
       else if (startsWithQuantity && itemName.length >= 2 && !shouldExclude(itemName)) {
         shouldAdd = true;
         finalName = itemName;
         finalPrice = bestPriceValue || 0;
-        reason = 'Qty + Name (no price)';
       }
       
       if (shouldAdd) {
-        // Check duplicates
         const isDuplicate = items.some(item => 
           item.name.toLowerCase() === finalName.toLowerCase() &&
           Math.abs(item.price - finalPrice) < 0.01
         );
         
-        if (isDuplicate) {
-          console.log(`  ⚠️ Duplicate`);
-          return;
+        if (!isDuplicate) {
+          items.push({
+            id: `ocr-${Date.now()}-${index}`,
+            name: finalName,
+            price: finalPrice,
+            assignedTo: []
+          });
         }
-        
-        console.log(`  ✅ ${reason}: "${finalName}" - $${finalPrice.toFixed(2)}`);
-        items.push({
-          id: `ocr-${Date.now()}-${index}`,
-          name: finalName,
-          price: finalPrice,
-          assignedTo: []
-        });
-      } else {
-        console.log(`  ❌ Not an item`);
       }
     });
     
-    console.log(`\n📊 Total items: ${items.length}`);
     return items;
   };
 
@@ -187,12 +191,13 @@ export default function App() {
       return;
     }
   
-    setStep(2);
-    await new Promise(resolve => setTimeout(resolve, 50));
+    if (step === 1) {
+      setStep(2);
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
     setIsProcessing(true);
   
     try {
-      // More aggressive compression for OCR
       const options = {
         maxSizeMB: 0.5,
         maxWidthOrHeight: 1500,
@@ -205,7 +210,6 @@ export default function App() {
       
       let finalFile = compressedFile;
       
-      // If still too large, compress again
       if (compressedFile.size > 1000000) {
         const options2 = {
           maxSizeMB: 0.3,
@@ -217,7 +221,6 @@ export default function App() {
         finalFile = await imageCompression(compressedFile, options2);
       }
       
-      // Convert compressed file to base64
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
@@ -225,14 +228,14 @@ export default function App() {
         reader.readAsDataURL(finalFile);
       });
       
-      // Set original image for preview
       const originalBase64 = await new Promise<string>((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
         reader.readAsDataURL(file);
       });
-      setUploadedImage(originalBase64);
-  
+      
+      updateCurrentReceipt({ uploadedImage: originalBase64 });
+
       const response = await fetch('/api/ocr', {
         method: 'POST',
         headers: {
@@ -256,25 +259,24 @@ export default function App() {
       }
   
       const extractedText = result.ParsedResults[0].ParsedText;
-  
       const parsedItems = parseReceiptText(extractedText);
   
       if (parsedItems.length === 0) {
         setError('No items found. Add manually below.');
-        setItems([]);
+        updateCurrentReceipt({ items: [] });
       } else {
-        setItems(parsedItems);
+        updateCurrentReceipt({ items: parsedItems });
       }
       
     } catch (err) {
       setError(`OCR failed: ${err instanceof Error ? err.message : 'Unknown error'}. Please add items manually.`);
-      setItems([]);
+      updateCurrentReceipt({ items: [] });
     } finally {
       setIsProcessing(false);
       setOcrProgress(0);
     }
   };
-
+  
   const addPerson = () => {
     const trimmedName = newPersonName.trim();
     if (!trimmedName) return;
@@ -290,93 +292,124 @@ export default function App() {
   };
 
   const removePerson = (name: string) => {
+    if (currentReceiptIndex > 0) {
+      setError('Cannot remove original party members');
+      return;
+    }
+    
     setPeople(people.filter(p => p.name !== name));
-    setItems(items.map(item => ({
-      ...item,
-      assignedTo: item.assignedTo.filter(p => p !== name)
-    })));
-    if (payer === name) setPayer('');
+    
+    const newReceipts = receipts.map(receipt => ({
+      ...receipt,
+      items: receipt.items.map(item => ({
+        ...item,
+        assignedTo: item.assignedTo.filter(p => p !== name)
+      })),
+      payer: receipt.payer === name ? '' : receipt.payer
+    }));
+    setReceipts(newReceipts);
   };
 
   const addItem = () => {
-    setItems([...items, {
-      id: `manual-${Date.now()}`,
-      name: '',
-      price: 0,
-      assignedTo: []
-    }]);
+    updateCurrentReceipt({
+      items: [...currentReceipt.items, {
+        id: `manual-${Date.now()}`,
+        name: '',
+        price: 0,
+        assignedTo: []
+      }]
+    });
   };
 
   const updateItem = (id: string, field: 'name' | 'price', value: string | number) => {
-    setItems(items.map(item => 
-      item.id === id ? { ...item, [field]: value } : item
-    ));
+    updateCurrentReceipt({
+      items: currentReceipt.items.map(item => 
+        item.id === id ? { ...item, [field]: value } : item
+      )
+    });
   };
 
   const deleteItem = (id: string) => {
-    setItems(items.filter(item => item.id !== id));
+    updateCurrentReceipt({
+      items: currentReceipt.items.filter(item => item.id !== id)
+    });
   };
 
   const togglePersonAssignment = (itemId: string, personName: string) => {
-    setItems(items.map(item => {
-      if (item.id !== itemId) return item;
-      const isAssigned = item.assignedTo.includes(personName);
-      return {
-        ...item,
-        assignedTo: isAssigned
-          ? item.assignedTo.filter(p => p !== personName)
-          : [...item.assignedTo, personName]
-      };
-    }));
+    updateCurrentReceipt({
+      items: currentReceipt.items.map(item => {
+        if (item.id !== itemId) return item;
+        const isAssigned = item.assignedTo.includes(personName);
+        return {
+          ...item,
+          assignedTo: isAssigned
+            ? item.assignedTo.filter(p => p !== personName)
+            : [...item.assignedTo, personName]
+        };
+      })
+    });
   };
 
-  const calculateGrandTotal = (): number => {
-    const subtotal = items.reduce((sum, item) => sum + (item.price || 0), 0);
+  const calculateReceiptTotal = (receipt: Receipt): number => {
+    const subtotal = receipt.items.reduce((sum, item) => sum + (item.price || 0), 0);
     let total = subtotal;
     
-    if (serviceChargeEnabled) {
-      total += subtotal * (serviceChargePercent / 100);
+    if (receipt.serviceChargeEnabled) {
+      total += subtotal * (receipt.serviceChargePercent / 100);
     }
     
-    if (gstEnabled) {
-      const baseAmount = serviceChargeEnabled 
-        ? subtotal * (1 + serviceChargePercent / 100)
+    if (receipt.gstEnabled) {
+      const baseAmount = receipt.serviceChargeEnabled 
+        ? subtotal * (1 + receipt.serviceChargePercent / 100)
         : subtotal;
-      total += baseAmount * (gstPercent / 100);
+      total += baseAmount * (receipt.gstPercent / 100);
     }
     
     return total;
   };
 
+  const calculateGrandTotal = (): number => {
+    return receipts.reduce((sum, receipt) => sum + calculateReceiptTotal(receipt), 0);
+  };
+
   const calculatePersonTotals = (): PersonCalculation[] => {
     const calculations = people.map(person => {
       let subtotal = 0;
-      const personItems: { name: string; amount: number; percentage?: number }[] = [];
-      
-      items.forEach(item => {
-        if (item.assignedTo.includes(person.name)) {
-          const shareCount = item.assignedTo.length;
-          const shareAmount = item.price / shareCount;
-          subtotal += shareAmount;
-          
-          personItems.push({
-            name: item.name,
-            amount: shareAmount,
-            percentage: shareCount > 1 ? Math.round(100 / shareCount) : undefined
-          });
-        }
-      });
-      
       let scAmount = 0;
       let gstAmount = 0;
+      const personItems: { name: string; amount: number; percentage?: number; receiptNum?: number }[] = [];
       
-      if (serviceChargeEnabled) {
-        scAmount = subtotal * (serviceChargePercent / 100);
-      }
-      
-      if (gstEnabled) {
-        gstAmount = (subtotal + scAmount) * (gstPercent / 100);
-      }
+      receipts.forEach((receipt, receiptIndex) => {
+        let receiptSubtotal = 0;
+        
+        receipt.items.forEach(item => {
+          if (item.assignedTo.includes(person.name)) {
+            const shareCount = item.assignedTo.length;
+            const shareAmount = item.price / shareCount;
+            receiptSubtotal += shareAmount;
+            
+            personItems.push({
+              name: item.name,
+              amount: shareAmount,
+              percentage: shareCount > 1 ? Math.round(100 / shareCount) : undefined,
+              receiptNum: receipts.length > 1 ? receiptIndex + 1 : undefined
+            });
+          }
+        });
+        
+        subtotal += receiptSubtotal;
+        
+        if (receipt.serviceChargeEnabled) {
+          scAmount += receiptSubtotal * (receipt.serviceChargePercent / 100);
+        }
+        
+        if (receipt.gstEnabled) {
+          const receiptScAmount = receipt.serviceChargeEnabled 
+            ? receiptSubtotal * (receipt.serviceChargePercent / 100)
+            : 0;
+          gstAmount += (receiptSubtotal + receiptScAmount) * (receipt.gstPercent / 100);
+        }
+      });
       
       return {
         name: person.name,
@@ -389,16 +422,16 @@ export default function App() {
     });
 
     const diff = calculateGrandTotal() - calculations.reduce((s, c) => s + c.total, 0);
-    if (Math.abs(diff) > 0.01 && payer) {
-      const payerCalc = calculations.find(c => c.name === payer);
-      if (payerCalc) payerCalc.total += diff;
+    if (Math.abs(diff) > 0.01) {
+      const personWithItems = calculations.find(c => c.items.length > 0);
+      if (personWithItems) personWithItems.total += diff;
     }
 
     return calculations;
   };
 
   const validateStep3 = (): boolean => {
-    if (!payer) {
+    if (!currentReceipt.payer) {
       setError('Please select who paid');
       return false;
     }
@@ -407,7 +440,7 @@ export default function App() {
   };
 
   const validateStep4 = (): boolean => {
-    const unassigned = items.filter(item => item.assignedTo.length === 0);
+    const unassigned = currentReceipt.items.filter(item => item.assignedTo.length === 0);
     if (unassigned.length > 0) {
       setError(`Assign people to: ${unassigned.map(i => i.name).join(', ')}`);
       return false;
@@ -418,53 +451,197 @@ export default function App() {
 
   const getPeopleWithNoItems = (): string[] => {
     return people
-      .filter(p => !items.some(item => item.assignedTo.includes(p.name)))
+      .filter(p => !currentReceipt.items.some(item => item.assignedTo.includes(p.name)))
       .map(p => p.name);
   };
 
+  const addAnotherReceipt = () => {
+    if (receipts.length >= 3) {
+      setError('Maximum of 3 receipts supported');
+      return;
+    }
+    
+    setCurrentReceiptIndex(receipts.length);
+    setStep(2);
+    setError('');
+  };
+
+  const navigateToReceipt = (index: number) => {
+    setCurrentReceiptIndex(index);
+    setStep(2);
+    setError('');
+  };
+
   const generateSummaryText = (): string => {
-    const calculations = calculatePersonTotals();
-    const grandTotal = calculateGrandTotal();
-    
-    let summary = '💰 Payment Summary:\n';
-    
-    // Only show transfers (not the payer's own payment)
-    calculations.forEach(calc => {
-      if (calc.name !== payer && calc.total > 0) {
-        summary += `${calc.name} → ${payer}: $${calc.total.toFixed(2)}\n`;
-      }
+    // Step 1: Calculate net consumption for each person
+    const personConsumption: { [name: string]: number } = {};
+    people.forEach(person => {
+      personConsumption[person.name] = 0;
     });
-    
-    summary += '\n📋 Breakdown:\n';
-    
-    calculations.forEach(calc => {
-      let line = `${calc.name}: `;
-      
-      calc.items.forEach((item, idx) => {
-        if (idx > 0) line += ', ';
-        if (item.percentage) {
-          // Calculate number of people sharing
-          const numPeople = Math.round(100 / item.percentage);
-          const splitText = numPeople === 2 ? 'split between two' : `split among ${numPeople}`;
-          line += `${item.name} ($${item.amount.toFixed(2)} - ${splitText})`;
-        } else {
-          line += `${item.name} ($${item.amount.toFixed(2)})`;
+
+    receipts.forEach(receipt => {
+      receipt.items.forEach(item => {
+        item.assignedTo.forEach(personName => {
+          const shareAmount = item.price / item.assignedTo.length;
+          personConsumption[personName] += shareAmount;
+        });
+      });
+
+      // Add SC and GST proportionally
+      people.forEach(person => {
+        let personSubtotal = 0;
+        receipt.items.forEach(item => {
+          if (item.assignedTo.includes(person.name)) {
+            const shareAmount = item.price / item.assignedTo.length;
+            personSubtotal += shareAmount;
+          }
+        });
+
+        if (receipt.serviceChargeEnabled) {
+          personConsumption[person.name] += personSubtotal * (receipt.serviceChargePercent / 100);
+        }
+
+        if (receipt.gstEnabled) {
+          const scAmount = receipt.serviceChargeEnabled 
+            ? personSubtotal * (receipt.serviceChargePercent / 100) 
+            : 0;
+          personConsumption[person.name] += (personSubtotal + scAmount) * (receipt.gstPercent / 100);
         }
       });
-      
-      if (calc.scAmount > 0 || calc.gstAmount > 0) {
-        const scGstTotal = calc.scAmount + calc.gstAmount;
-        line += `, SC+GST ($${scGstTotal.toFixed(2)})`;
-      }
-      
-      line += ` = $${calc.total.toFixed(2)}`;
-      summary += line + '\n';
     });
+
+    // Step 2: Calculate what each person paid
+    const personPaid: { [name: string]: number } = {};
+    people.forEach(person => {
+      personPaid[person.name] = 0;
+    });
+
+    receipts.forEach(receipt => {
+      if (receipt.payer) {
+        personPaid[receipt.payer] += calculateReceiptTotal(receipt);
+      }
+    });
+
+    // Step 3: Calculate net positions (positive = owed TO them, negative = they OWE)
+    const netPositions: { [name: string]: number } = {};
+    people.forEach(person => {
+      netPositions[person.name] = personPaid[person.name] - personConsumption[person.name];
+    });
+
+    // Step 4: Optimize transfers
+    const creditors = people.filter(p => netPositions[p.name] > 0.01)
+      .map(p => ({ name: p.name, amount: netPositions[p.name] }))
+      .sort((a, b) => b.amount - a.amount);
     
-    // Add payer info at the end of breakdown
-    summary += `\n${payer} paid $${grandTotal.toFixed(2)} for the party.\n`;
+    const debtors = people.filter(p => netPositions[p.name] < -0.01)
+      .map(p => ({ name: p.name, amount: -netPositions[p.name] }))
+      .sort((a, b) => b.amount - a.amount);
+
+    const transfers: { from: string; to: string; amount: number }[] = [];
     
-    // Add credit line
+    const creditorsCopy = creditors.map(c => ({ ...c }));
+    const debtorsCopy = debtors.map(d => ({ ...d }));
+
+    debtorsCopy.forEach(debtor => {
+      let remaining = debtor.amount;
+      
+      for (const creditor of creditorsCopy) {
+        if (remaining < 0.01) break;
+        if (creditor.amount < 0.01) continue;
+
+        const transferAmount = Math.min(remaining, creditor.amount);
+        transfers.push({
+          from: debtor.name,
+          to: creditor.name,
+          amount: transferAmount
+        });
+
+        remaining -= transferAmount;
+        creditor.amount -= transferAmount;
+      }
+    });
+
+    // Generate summary text
+    let summary = '💰 Payment Summary:\n';
+    
+    if (transfers.length === 0) {
+      summary += '\nAll settled! No transfers needed.\n';
+    } else {
+      transfers.forEach(t => {
+        summary += `${t.from} → ${t.to}: ${t.amount.toFixed(2)}\n`;
+      });
+    }
+
+    // Show who paid what
+    summary += '\n💳 Payments Made:\n';
+    people.forEach(person => {
+      if (personPaid[person.name] > 0) {
+        summary += `${person.name} paid ${personPaid[person.name].toFixed(2)}\n`;
+      }
+    });
+
+    // Breakdown by receipt
+    summary += '\n📋 Breakdown by Receipt:\n';
+    
+    receipts.forEach((receipt, receiptIndex) => {
+      summary += `\n[Receipt ${receiptIndex + 1}]\n`;
+      
+      people.forEach(person => {
+        const personItems: { name: string; amount: number; percentage?: number }[] = [];
+        let personSubtotal = 0;
+
+        receipt.items.forEach(item => {
+          if (item.assignedTo.includes(person.name)) {
+            const shareCount = item.assignedTo.length;
+            const shareAmount = item.price / shareCount;
+            personSubtotal += shareAmount;
+
+            personItems.push({
+              name: item.name,
+              amount: shareAmount,
+              percentage: shareCount > 1 ? Math.round(100 / shareCount) : undefined
+            });
+          }
+        });
+
+        if (personItems.length === 0) return;
+
+        let line = `${person.name}: `;
+        
+        personItems.forEach((item, idx) => {
+          if (idx > 0) line += ', ';
+          line += `${item.name} (${item.amount.toFixed(2)}`;
+          if (item.percentage) {
+            const numPeople = Math.round(100 / item.percentage);
+            const splitText = numPeople === 2 ? 'split between two' : `split among ${numPeople}`;
+            line += ` - ${splitText}`;
+          }
+          line += ')';
+        });
+
+        let personSc = 0;
+        let personGst = 0;
+
+        if (receipt.serviceChargeEnabled) {
+          personSc = personSubtotal * (receipt.serviceChargePercent / 100);
+        }
+
+        if (receipt.gstEnabled) {
+          personGst = (personSubtotal + personSc) * (receipt.gstPercent / 100);
+        }
+
+        if (personSc > 0 || personGst > 0) {
+          line += `, SC+GST (${(personSc + personGst).toFixed(2)})`;
+        }
+
+        const personTotal = personSubtotal + personSc + personGst;
+        line += ` = ${personTotal.toFixed(2)}`;
+        summary += line + '\n';
+      });
+
+      summary += `Receipt ${receiptIndex + 1} Total: ${calculateReceiptTotal(receipt).toFixed(2)}\n`;
+    });
+
     summary += '\n---\nGenerated by Pay How Much Ah, a web app by Manish Nair. Use it at https://pay-how-much-ah.vercel.app';
     
     return summary;
@@ -474,6 +651,21 @@ export default function App() {
     navigator.clipboard.writeText(generateSummaryText());
     setShowCopyConfirm(true);
     setTimeout(() => setShowCopyConfirm(false), 2000);
+  };
+
+  const getReceiptIndicator = (): string => {
+    if (receipts.length === 0) return '';
+    
+    // Check if current receipt exists in the array
+    const currentReceiptExists = receipts[currentReceiptIndex] !== undefined;
+    
+    if (!currentReceiptExists) {
+      // Working on a new receipt that hasn't been saved yet
+      return `Receipt ${currentReceiptIndex + 1}`;
+    }
+    
+    if (receipts.length === 1) return 'Receipt 1';
+    return `Receipt ${currentReceiptIndex + 1} of ${receipts.length}`;
   };
 
   return (
@@ -494,6 +686,31 @@ export default function App() {
             />
           ))}
         </div>
+
+        {receipts.length > 0 && step >= 2 && step <= 4 && (
+          <div className="mb-4 flex items-center justify-between">
+            <div className="text-sm font-medium text-gray-700">
+              {getReceiptIndicator()}
+            </div>
+            {receipts.length > 1 && (
+              <div className="flex gap-2">
+                {receipts.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => navigateToReceipt(idx)}
+                    className={`px-3 py-1 text-sm rounded ${
+                      idx === currentReceiptIndex
+                        ? 'bg-gray-900 text-white'
+                        : 'bg-gray-200 hover:bg-gray-300'
+                    }`}
+                  >
+                    R{idx + 1}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         
         <div className="bg-white rounded-xl shadow-sm p-6">
           {step === 1 && (
@@ -552,20 +769,35 @@ export default function App() {
                 </div>
               ) : (
                 <>
-                  {uploadedImage && (
+                  {currentReceiptIndex > 0 && (
+                    <div className="mb-4">
+                      <label className="w-full px-6 py-3 bg-gray-100 text-gray-700 rounded-lg cursor-pointer hover:bg-gray-200 transition flex items-center justify-center gap-2">
+                        <Upload className="w-5 h-5" />
+                        Upload Receipt {currentReceiptIndex + 1}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/jpg,image/png"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  )}
+
+                  {currentReceipt.uploadedImage && (
                     <div className="mb-4">
                       <p className="text-sm text-gray-600 mb-2">Receipt:</p>
-                      <img src={uploadedImage} alt="Receipt" className="max-h-40 mx-auto rounded border" />
+                      <img src={currentReceipt.uploadedImage} alt="Receipt" className="max-h-40 mx-auto rounded border" />
                     </div>
                   )}
 
                   <div>
                     <div className="flex justify-between items-center mb-3">
                       <h3 className="text-lg font-semibold">Items</h3>
-                      {items.length === 0 && <span className="text-sm text-gray-500">Add manually</span>}
+                      {currentReceipt.items.length === 0 && <span className="text-sm text-gray-500">Add manually</span>}
                     </div>
                     <div className="space-y-2">
-                      {items.map(item => (
+                      {currentReceipt.items.map(item => (
                         <div key={item.id} className="flex gap-2 items-center">
                           <input
                             type="text"
@@ -634,15 +866,22 @@ export default function App() {
                       {people.map(person => (
                         <div key={person.name} className="px-3 py-1 bg-gray-100 rounded-full flex items-center gap-2">
                           <span>{person.name}</span>
-                          <button
-                            onClick={() => removePerson(person.name)}
-                            className="text-gray-600 hover:text-red-600"
-                          >
-                            ×
-                          </button>
+                          {currentReceiptIndex === 0 && (
+                            <button
+                              onClick={() => removePerson(person.name)}
+                              className="text-gray-600 hover:text-red-600"
+                            >
+                              ×
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
+                    {currentReceiptIndex > 0 && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        Original members cannot be removed. You can add new members.
+                      </p>
+                    )}
                   </div>
 
                   <div className="border-t pt-6">
@@ -652,16 +891,16 @@ export default function App() {
                         <input
                           type="checkbox"
                           id="sc"
-                          checked={serviceChargeEnabled}
-                          onChange={(e) => setServiceChargeEnabled(e.target.checked)}
+                          checked={currentReceipt.serviceChargeEnabled}
+                          onChange={(e) => updateCurrentReceipt({ serviceChargeEnabled: e.target.checked })}
                           className="w-4 h-4"
                         />
                         <label htmlFor="sc" className="flex-1">Service Charge</label>
                         <input
                           type="number"
-                          value={serviceChargePercent}
-                          onChange={(e) => setServiceChargePercent(parseFloat(e.target.value) || 0)}
-                          disabled={!serviceChargeEnabled}
+                          value={currentReceipt.serviceChargePercent}
+                          onChange={(e) => updateCurrentReceipt({ serviceChargePercent: parseFloat(e.target.value) || 0 })}
+                          disabled={!currentReceipt.serviceChargeEnabled}
                           className="w-20 px-3 py-1 border rounded-lg disabled:bg-gray-100"
                         />
                         <span>%</span>
@@ -670,16 +909,16 @@ export default function App() {
                         <input
                           type="checkbox"
                           id="gst"
-                          checked={gstEnabled}
-                          onChange={(e) => setGstEnabled(e.target.checked)}
+                          checked={currentReceipt.gstEnabled}
+                          onChange={(e) => updateCurrentReceipt({ gstEnabled: e.target.checked })}
                           className="w-4 h-4"
                         />
                         <label htmlFor="gst" className="flex-1">GST</label>
                         <input
                           type="number"
-                          value={gstPercent}
-                          onChange={(e) => setGstPercent(parseFloat(e.target.value) || 0)}
-                          disabled={!gstEnabled}
+                          value={currentReceipt.gstPercent}
+                          onChange={(e) => updateCurrentReceipt({ gstPercent: parseFloat(e.target.value) || 0 })}
+                          disabled={!currentReceipt.gstEnabled}
                           className="w-20 px-3 py-1 border rounded-lg disabled:bg-gray-100"
                         />
                         <span>%</span>
@@ -689,8 +928,8 @@ export default function App() {
 
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <div className="flex justify-between text-lg font-semibold">
-                      <span>Total</span>
-                      <span>${calculateGrandTotal().toFixed(2)}</span>
+                      <span>Receipt Total</span>
+                      <span>${calculateReceiptTotal(currentReceipt).toFixed(2)}</span>
                     </div>
                   </div>
 
@@ -707,11 +946,12 @@ export default function App() {
                         setError('Add at least one person');
                         return;
                       }
-                      if (items.length === 0) {
+                      if (currentReceipt.items.length === 0) {
                         setError('Add at least one item');
                         return;
                       }
                       setError('');
+                      updateCurrentReceipt({ payer: currentReceipt.payer });
                       setStep(3);
                     }}
                     className="w-full px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
@@ -730,9 +970,9 @@ export default function App() {
                 {people.map(person => (
                   <button
                     key={person.name}
-                    onClick={() => setPayer(person.name)}
+                    onClick={() => updateCurrentReceipt({ payer: person.name })}
                     className={`w-full px-4 py-3 border-2 rounded-lg transition ${
-                      payer === person.name ? 'border-gray-900 bg-gray-50' : 'border-gray-200 hover:border-gray-400'
+                      currentReceipt.payer === person.name ? 'border-gray-900 bg-gray-50' : 'border-gray-200 hover:border-gray-400'
                     }`}
                   >
                     {person.name}
@@ -763,7 +1003,7 @@ export default function App() {
             <div className="space-y-6">
               <h2 className="text-2xl font-semibold">Assign Items</h2>
               <div className="space-y-4">
-                {items.map(item => (
+                {currentReceipt.items.map(item => (
                   <div key={item.id} className="border rounded-lg p-4">
                     <div className="flex justify-between mb-3">
                       <span className="font-medium">{item.name}</span>
@@ -806,12 +1046,25 @@ export default function App() {
                 <button onClick={() => setStep(3)} className="px-6 py-3 border rounded-lg hover:bg-gray-50">
                   Back
                 </button>
-                <button
-                  onClick={() => validateStep4() && setStep(5)}
-                  className="flex-1 px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
-                >
-                  Generate Summary
-                </button>
+                <div className="flex-1 flex gap-3">
+                  {receipts.length < 3 && (
+                    <button
+                      onClick={() => {
+                        if (!validateStep4()) return;
+                        addAnotherReceipt();
+                      }}
+                      className="flex-1 px-6 py-3 bg-gray-200 text-gray-900 rounded-lg hover:bg-gray-300"
+                    >
+                      + Another Receipt
+                    </button>
+                  )}
+                  <button
+                    onClick={() => validateStep4() && setStep(5)}
+                    className="flex-1 px-6 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+                  >
+                    Generate Summary
+                  </button>
+                </div>
               </div>
             </div>
           )}
