@@ -67,7 +67,7 @@ async function tryGoogleVision(imageData: string) {
 
   // Group words into lines based on Y coordinate (tolerance of 8 pixels)
   const lines: Word[][] = [];
-  const yTolerance = 8;
+  const yTolerance = 11;
 
   wordObjects.forEach(word => {
     let addedToLine = false;
