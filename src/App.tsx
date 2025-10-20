@@ -272,7 +272,14 @@ export default function App() {
       }
   
       const extractedText = result.ParsedResults[0].ParsedText;
+      console.log('=== RAW OCR OUTPUT ===');
+      console.log(extractedText);
+      console.log('=== END RAW OUTPUT ===');
+
       const parsedItems = parseReceiptText(extractedText);
+      console.log('=== PARSED ITEMS ===');
+      console.log(parsedItems);
+      console.log('=== END PARSED ITEMS ===');
   
       if (parsedItems.length === 0) {
         tracking.ocrFailed('No items found');
