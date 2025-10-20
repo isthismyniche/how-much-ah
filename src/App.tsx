@@ -84,10 +84,8 @@ export default function App() {
     const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
     
     const excludeTerms = [
-      'total', 'subtotal', 'tax', 'gst', 'service', 'charge', 'svr', 'chrg',
-      'cash', 'change', 'payment', 'tender', 'receipt', 'thank', 'welcome',
-      'invoice', 'bill', 'discount', 'pos', 'table', 'cashier', 'station',
-      'rept', 'pax', 'april', 'date', 'price'
+      'total', 'subtotal', 'tax', 'gst', 'service', 'charge',
+      'cash', 'change', 'payment', 'receipt', 'thank', 'survey'
     ];
     
     const shouldExclude = (text: string): boolean => {
@@ -95,83 +93,102 @@ export default function App() {
       return excludeTerms.some(term => lowerText.includes(term));
     };
     
+    const processedIndices = new Set<number>();
+    
     lines.forEach((line, index) => {
-      if (line.length < 2) return;
-      
-      if (shouldExclude(line)) {
+      if (processedIndices.has(index) || shouldExclude(line)) {
         return;
       }
       
-      const priceMatches = line.match(/\$?\d+\.\d{2}/g);
-      
-      let bestPrice = null;
-      let bestPriceValue = 0;
-      
-      if (priceMatches) {
-        for (let i = priceMatches.length - 1; i >= 0; i--) {
-          const price = parseFloat(priceMatches[i].replace('$', ''));
-          if (price > 0 && price < 1000) {
-            bestPrice = priceMatches[i];
-            bestPriceValue = price;
-            break;
-          }
+      // Pattern 1: Price on same line - "1 Item Name $ 5.50" or "Item Name 1 $ 21.00"
+      const sameLineMatch = line.match(/^(.+?)\s+\$?\s*(\d+\.\d{2})$/);
+      if (sameLineMatch) {
+        let itemText = sameLineMatch[1].trim();
+        const price = parseFloat(sameLineMatch[2]);
+        
+        // Remove quantity prefix (1, 2, etc.)
+        itemText = itemText.replace(/^\d+\s+/, '');
+        // Remove trailing $ and numbers
+        itemText = itemText.replace(/\s*\d*\s*\$?\s*$/, '').trim();
+        // Remove asterisks and plus signs (modifiers)
+        itemText = itemText.replace(/^[\*\+\s]+/, '').trim();
+        
+        if (itemText.length >= 3 && !shouldExclude(itemText) && price > 0 && price < 500) {
+          items.push({
+            id: `ocr-${Date.now()}-${index}`,
+            name: itemText,
+            price: price,
+            assignedTo: []
+          });
+          processedIndices.add(index);
+          return;
         }
       }
       
-      let itemName = line;
+      // Pattern 2: Item with quantity prefix (for when price is separate)
+      const itemMatch = line.match(/^(\d+)\s+([A-Z][A-Za-z\s&'()]{2,})$/i);
       
-      if (priceMatches) {
-        priceMatches.forEach(p => itemName = itemName.replace(p, ''));
-      }
-      
-      itemName = itemName.replace(/^\d+\s+/, '');
-      itemName = itemName.replace(/^\d+\.\s*/, '');
-      itemName = itemName.replace(/^[\*\-\+\#]+\s*/, '');
-      itemName = itemName.replace(/\+{2,}/g, '');
-      itemName = itemName.replace(/\.{2,}/g, '');
-      itemName = itemName.replace(/\s+/g, ' ').trim();
-      
-      const isStandalonePriceLine = /^\$?\d+\.\d{2}$/.test(line.trim());
-      const startsWithQuantity = /^\d+\s+[A-Z]/.test(line);
-      
-      let shouldAdd = false;
-      let finalName = '';
-      let finalPrice = 0;
-      
-      if (startsWithQuantity && itemName.length >= 2 && bestPrice && bestPriceValue > 0) {
-        shouldAdd = true;
-        finalName = itemName;
-        finalPrice = bestPriceValue;
-      }
-      else if (!startsWithQuantity && itemName.length >= 3 && bestPrice && bestPriceValue > 0 && !shouldExclude(itemName)) {
-        shouldAdd = true;
-        finalName = itemName;
-        finalPrice = bestPriceValue;
-      }
-      else if (isStandalonePriceLine && bestPriceValue > 0 && bestPriceValue < 100) {
-        shouldAdd = true;
-        finalName = 'Item';
-        finalPrice = bestPriceValue;
-      }
-      else if (startsWithQuantity && itemName.length >= 2 && !shouldExclude(itemName)) {
-        shouldAdd = true;
-        finalName = itemName;
-        finalPrice = bestPriceValue || 0;
-      }
-      
-      if (shouldAdd) {
-        const isDuplicate = items.some(item => 
-          item.name.toLowerCase() === finalName.toLowerCase() &&
-          Math.abs(item.price - finalPrice) < 0.01
-        );
+      if (itemMatch) {
+        let itemName = itemMatch[2].trim();
         
-        if (!isDuplicate) {
+        // Remove trailing $ 
+        itemName = itemName.replace(/\$$/, '').trim();
+        // Remove asterisks and plus signs
+        itemName = itemName.replace(/^[\*\+\s]+/, '').trim();
+        
+        if (itemName.length < 3 || shouldExclude(itemName)) {
+          return;
+        }
+        
+        // Look BACKWARD for price (2-3 lines)
+        let foundPrice = null;
+        for (let offset = 1; offset <= 3; offset++) {
+          const prevIndex = index - offset;
+          if (prevIndex < 0) break;
+          if (processedIndices.has(prevIndex)) continue;
+          
+          const prevLine = lines[prevIndex];
+          const priceMatch = prevLine.match(/^\$?\s*(\d+\.\d{2})$/);
+          
+          if (priceMatch) {
+            const price = parseFloat(priceMatch[1]);
+            if (price > 0 && price < 500) {
+              foundPrice = price;
+              processedIndices.add(prevIndex);
+              break;
+            }
+          }
+        }
+        
+        // Look FORWARD for price (1-2 lines)
+        if (foundPrice === null) {
+          for (let offset = 1; offset <= 2; offset++) {
+            const nextIndex = index + offset;
+            if (nextIndex >= lines.length) break;
+            if (processedIndices.has(nextIndex)) continue;
+            
+            const nextLine = lines[nextIndex];
+            const priceMatch = nextLine.match(/^\$?\s*(\d+\.\d{2})$/);
+            
+            if (priceMatch) {
+              const price = parseFloat(priceMatch[1]);
+              if (price > 0 && price < 500) {
+                foundPrice = price;
+                processedIndices.add(nextIndex);
+                break;
+              }
+            }
+          }
+        }
+        
+        if (foundPrice !== null) {
           items.push({
             id: `ocr-${Date.now()}-${index}`,
-            name: finalName,
-            price: finalPrice,
+            name: itemName,
+            price: foundPrice,
             assignedTo: []
           });
+          processedIndices.add(index);
         }
       }
     });
