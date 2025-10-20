@@ -73,8 +73,11 @@ async function tryGoogleVision(imageData: string) {
     let addedToLine = false;
     
     for (const line of lines) {
-      const avgY = line.reduce((sum, w) => sum + w.y, 0) / line.length;
-      if (Math.abs(word.y - avgY) < yTolerance) {
+      const minY = Math.min(...line.map(w => w.y));
+      const maxY = Math.max(...line.map(w => w.y));
+      
+      // Check if word is within the Y-range of this line (with tolerance)
+      if (word.y >= minY - yTolerance && word.y <= maxY + yTolerance) {
         line.push(word);
         addedToLine = true;
         break;
