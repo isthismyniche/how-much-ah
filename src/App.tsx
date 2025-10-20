@@ -29,6 +29,8 @@ interface Receipt {
 export default function App() {
   useEffect(() => {
     initGA();
+    tracking.reachedStep(1);
+    setStepsVisited(new Set([1]));
   }, [])
   const [step, setStep] = useState(1);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
@@ -39,10 +41,14 @@ export default function App() {
   const [ocrProgress, setOcrProgress] = useState(0);
   const [error, setError] = useState('');
   const [showCopyConfirm, setShowCopyConfirm] = useState(false);
+  const [stepsVisited, setStepsVisited] = useState<Set<number>>(new Set());
 
   const setStepWithTracking = (newStep: number) => {
     setStep(newStep);
-    tracking.reachedStep(newStep);
+    if (!stepsVisited.has(newStep)) {
+      tracking.reachedStep(newStep);
+      setStepsVisited(prev => new Set(prev).add(newStep));
+    }
   };
 
   const getCurrentReceipt = (): Receipt => {
@@ -197,6 +203,12 @@ export default function App() {
     }
     setIsProcessing(true);
     tracking.ocrStarted();
+    // After OCR starts
+    if (currentReceiptIndex === 0) {
+      tracking.firstReceiptOCR();
+    } else {
+      tracking.additionalReceiptOCR(currentReceiptIndex + 1);
+    }
 
     try {
       const options = {
@@ -696,6 +708,9 @@ export default function App() {
                 
                 <button
                     onClick={() => {
+                      if (currentReceiptIndex === 0) {
+                        tracking.firstReceiptManual();
+                      }
                       tracking.skippedOCR();
                       setStepWithTracking(2);
                     }}
@@ -923,6 +938,12 @@ export default function App() {
                         return;
                       }
                       setError('');
+                      
+                      // Track completion of first receipt
+                      if (currentReceiptIndex === 0) {
+                        tracking.completedFirstReceipt();
+                      }
+                      
                       updateCurrentReceipt({ payer: currentReceipt.payer });
                       setStepWithTracking(3);
                     }}

@@ -94,5 +94,25 @@ export const tracking = {
 
   skippedOCR: () => {
     trackEvent('OCR', 'Skipped', 'Manual Entry Selected');
+  },
+
+  // First receipt tracking
+  firstReceiptOCR: () => {
+    trackEvent('First Receipt', 'OCR', 'Method');
+  },
+
+  firstReceiptManual: () => {
+    trackEvent('First Receipt', 'Manual Entry', 'Method');
+  },
+
+  // Additional receipt tracking
+  additionalReceiptOCR: (receiptNumber: number) => {
+    trackEvent('Additional Receipt', 'OCR', `Receipt ${receiptNumber}`);
+  },
+
+  completedFirstReceipt: () => {
+    trackEvent('Receipt Progress', 'Completed Receipt 1', 'First Receipt');
   }
+
 };
+
