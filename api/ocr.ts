@@ -28,19 +28,41 @@ async function tryGoogleVision(imageData: string) {
   // Remove data URL prefix if present
   const base64Data = imageData.split(',')[1] || imageData;
 
-  const [result] = await client.textDetection({
+  // Use document text detection instead of regular text detection
+  const [result] = await client.documentTextDetection({
     image: { content: base64Data }
   });
 
-  const detections = result.textAnnotations;
-  if (!detections || detections.length === 0) {
+  const fullTextAnnotation = result.fullTextAnnotation;
+  if (!fullTextAnnotation || !fullTextAnnotation.text) {
     throw new Error('No text detected');
   }
+
+  // Get line-by-line text from pages -> blocks -> paragraphs
+  let structuredText = '';
+  
+  if (fullTextAnnotation.pages) {
+    fullTextAnnotation.pages.forEach(page => {
+      page.blocks?.forEach(block => {
+        block.paragraphs?.forEach(paragraph => {
+          const paragraphText = paragraph.words
+            ?.map(word => word.symbols?.map(s => s.text).join(''))
+            .join(' ');
+          if (paragraphText) {
+            structuredText += paragraphText + '\n';
+          }
+        });
+      });
+    });
+  }
+
+  // Fallback to full text if structured extraction fails
+  const finalText = structuredText.trim() || fullTextAnnotation.text;
 
   // Format to match OCR.space response structure
   return {
     ParsedResults: [{
-      ParsedText: detections[0].description || '',
+      ParsedText: finalText,
       TextOverlay: null,
       FileParseExitCode: 1,
       ErrorMessage: '',
@@ -49,7 +71,8 @@ async function tryGoogleVision(imageData: string) {
     OCRExitCode: 1,
     IsErroredOnProcessing: false,
     ProcessingTimeInMilliseconds: '0',
-    SearchablePDFURL: ''
+    SearchablePDFURL: '',
+    ocrMethod: 'google_vision_document'
   };
 }
 
