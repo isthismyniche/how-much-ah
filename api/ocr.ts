@@ -73,8 +73,8 @@ async function tryGoogleVision(imageData: string) {
     let addedToLine = false;
     
     for (const line of lines) {
-      const lineY = line[0].y;
-      if (Math.abs(word.y - lineY) < yTolerance) {
+      const avgY = line.reduce((sum, w) => sum + w.y, 0) / line.length;
+      if (Math.abs(word.y - avgY) < yTolerance) {
         line.push(word);
         addedToLine = true;
         break;
