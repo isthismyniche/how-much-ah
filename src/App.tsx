@@ -85,7 +85,7 @@ export default function App() {
     
     const excludeTerms = [
       'total', 'subtotal', 'tax', 'gst', 'service', 'charge',
-      'cash', 'change', 'payment', 'receipt', 'thank', 'survey'
+      'cash', 'change', 'payment', 'receipt', 'thank', 'survey', 'price'
     ];
     
     const shouldExclude = (text: string): boolean => {

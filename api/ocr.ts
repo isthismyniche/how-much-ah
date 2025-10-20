@@ -65,9 +65,9 @@ async function tryGoogleVision(imageData: string) {
     };
   });
 
-  // Group words into lines based on Y coordinate (tolerance of 15 pixels)
+  // Group words into lines based on Y coordinate (tolerance of 8 pixels)
   const lines: Word[][] = [];
-  const yTolerance = 15;
+  const yTolerance = 8;
 
   wordObjects.forEach(word => {
     let addedToLine = false;
