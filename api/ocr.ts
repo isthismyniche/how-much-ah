@@ -28,36 +28,76 @@ async function tryGoogleVision(imageData: string) {
   // Remove data URL prefix if present
   const base64Data = imageData.split(',')[1] || imageData;
 
-  // Use document text detection instead of regular text detection
-  const [result] = await client.documentTextDetection({
+  const [result] = await client.textDetection({
     image: { content: base64Data }
   });
 
-  const fullTextAnnotation = result.fullTextAnnotation;
-  if (!fullTextAnnotation || !fullTextAnnotation.text) {
+  const textAnnotations = result.textAnnotations;
+  if (!textAnnotations || textAnnotations.length === 0) {
     throw new Error('No text detected');
   }
 
-  // Get line-by-line text from pages -> blocks -> paragraphs
-  let structuredText = '';
-  
-  if (fullTextAnnotation.pages) {
-    fullTextAnnotation.pages.forEach(page => {
-      page.blocks?.forEach(block => {
-        block.paragraphs?.forEach(paragraph => {
-          const paragraphText = paragraph.words
-            ?.map(word => word.symbols?.map(s => s.text).join(''))
-            .join(' ');
-          if (paragraphText) {
-            structuredText += paragraphText + '\n';
-          }
-        });
-      });
-    });
+  // Skip first annotation (it's the full text)
+  const words = textAnnotations.slice(1);
+
+  // Group words by their vertical position (Y coordinate)
+  interface Word {
+    text: string;
+    x: number;
+    y: number;
+    vertices: any;
   }
 
-  // Fallback to full text if structured extraction fails
-  const finalText = structuredText.trim() || fullTextAnnotation.text;
+  const wordObjects: Word[] = words.map(word => {
+    const vertices = word.boundingPoly?.vertices || [];
+    const avgY = vertices.length > 0 
+      ? vertices.reduce((sum: number, v: any) => sum + (v.y || 0), 0) / vertices.length
+      : 0;
+    const avgX = vertices.length > 0
+      ? vertices.reduce((sum: number, v: any) => sum + (v.x || 0), 0) / vertices.length
+      : 0;
+    
+    return {
+      text: word.description || '',
+      x: avgX,
+      y: avgY,
+      vertices
+    };
+  });
+
+  // Group words into lines based on Y coordinate (tolerance of 15 pixels)
+  const lines: Word[][] = [];
+  const yTolerance = 15;
+
+  wordObjects.forEach(word => {
+    let addedToLine = false;
+    
+    for (const line of lines) {
+      const lineY = line[0].y;
+      if (Math.abs(word.y - lineY) < yTolerance) {
+        line.push(word);
+        addedToLine = true;
+        break;
+      }
+    }
+    
+    if (!addedToLine) {
+      lines.push([word]);
+    }
+  });
+
+  // Sort lines by Y position (top to bottom)
+  lines.sort((a, b) => a[0].y - b[0].y);
+
+  // Sort words in each line by X position (left to right)
+  lines.forEach(line => line.sort((a, b) => a.x - b.x));
+
+  // Join words in each line to create text lines
+  const textLines = lines.map(line => 
+    line.map(w => w.text).join(' ')
+  );
+
+  const finalText = textLines.join('\n');
 
   // Format to match OCR.space response structure
   return {
@@ -72,7 +112,7 @@ async function tryGoogleVision(imageData: string) {
     IsErroredOnProcessing: false,
     ProcessingTimeInMilliseconds: '0',
     SearchablePDFURL: '',
-    ocrMethod: 'google_vision_document'
+    ocrMethod: 'google_vision_spatial'
   };
 }
 
