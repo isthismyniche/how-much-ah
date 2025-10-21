@@ -95,48 +95,6 @@ async function tryGoogleVision(imageData: string) {
   // Sort words in each line by X position (left to right)
   lines.forEach(line => line.sort((a, b) => a.x - b.x));
 
-  // After all grouping is done and lines are sorted
-  console.log('\n=== ITEM-PRICE LINES (with context) ===');
-
-  lines.forEach((line, idx) => {
-    const lineText = line.map(w => w.text).join(' ');
-    
-    // Only log lines that look like items (have prices or quantity patterns)
-    const hasPrice = /\$?\d+\.\d{2}/.test(lineText);
-    const hasQuantity = /^\d+\s+[A-Z]/.test(lineText);
-    
-    if (hasPrice || hasQuantity) {
-      const minY = Math.min(...line.map(w => w.y));
-      const maxY = Math.max(...line.map(w => w.y));
-      
-      console.log(`\nLine ${idx}: "${lineText}"`);
-      console.log(`  Y range: ${minY.toFixed(1)} to ${maxY.toFixed(1)}`);
-      
-      // Show individual word positions for this line
-      line.forEach(w => {
-        console.log(`    "${w.text}" → X=${w.x.toFixed(1)}, Y=${w.y.toFixed(1)}`);
-      });
-      
-      // Show words from line above (if exists)
-      if (idx > 0) {
-        const prevLine = lines[idx - 1];
-        console.log(`  Line above: "${prevLine.map(w => w.text).join(' ')}"`);
-        prevLine.slice(-2).forEach(w => {
-          console.log(`    "${w.text}" → X=${w.x.toFixed(1)}, Y=${w.y.toFixed(1)}`);
-        });
-      }
-      
-      // Show words from line below (if exists)
-      if (idx < lines.length - 1) {
-        const nextLine = lines[idx + 1];
-        console.log(`  Line below: "${nextLine.map(w => w.text).join(' ')}"`);
-        nextLine.slice(0, 2).forEach(w => {
-          console.log(`    "${w.text}" → X=${w.x.toFixed(1)}, Y=${w.y.toFixed(1)}`);
-        });
-      }
-    }
-  });
-
   // Join words in each line to create text lines
   const textLines = lines.map(line => 
     line.map(w => w.text).join(' ')

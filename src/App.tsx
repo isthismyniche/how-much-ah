@@ -717,7 +717,7 @@ export default function App() {
               <Upload className="w-16 h-16 mx-auto mb-4 text-gray-400" />
               <h2 className="text-2xl font-semibold mb-4">Upload Your Receipt</h2>
               <p className="text-gray-600 mb-2">JPG or PNG (max 10MB)</p>
-              <p className="text-sm text-gray-500 mb-6">📸 Clear photo = better results</p>
+              <p className="text-sm text-gray-500 mb-6">📸 Clear photo on flat surface = better results</p>
               
               <div className="flex flex-col gap-3 items-center">
                 <label className="px-6 py-3 bg-gray-900 text-white rounded-lg cursor-pointer hover:bg-gray-800 transition">
@@ -941,6 +941,13 @@ export default function App() {
                     <div className="flex justify-between text-lg font-semibold">
                       <span>Receipt Total</span>
                       <span>${calculateReceiptTotal(currentReceipt).toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm">
+                      <span className="font-medium">Check accuracy:</span> Verify all items and prices match your receipt. OCR may miss or misread some details.
                     </div>
                   </div>
 
