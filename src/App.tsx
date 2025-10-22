@@ -41,6 +41,7 @@ export default function App() {
   const [ocrProgress, setOcrProgress] = useState(0);
   const [error, setError] = useState('');
   const [showCopyConfirm, setShowCopyConfirm] = useState(false);
+  const [includeBreakdown, setIncludeBreakdown] = useState(false); 
   const [stepsVisited, setStepsVisited] = useState<Set<number>>(new Set());
 
   const setStepWithTracking = (newStep: number) => {
@@ -462,7 +463,7 @@ export default function App() {
     setError('');
   };
 
-  const generateSummaryText = (): string => {
+  const generateSummaryText = (withBreakdown: boolean = true): string => {
     const personConsumption: { [name: string]: number } = {};
     people.forEach(person => {
       personConsumption[person.name] = 0;
@@ -563,66 +564,68 @@ export default function App() {
       }
     });
 
-    summary += '\n📋 Breakdown by Receipt:\n';
-    
-    receipts.forEach((receipt, receiptIndex) => {
-      summary += `\n[Receipt ${receiptIndex + 1}]\n`;
+    if (withBreakdown) {
+      summary += '\n📋 Breakdown by Receipt:\n';
       
-      people.forEach(person => {
-        const personItems: { name: string; amount: number; percentage?: number }[] = [];
-        let personSubtotal = 0;
-
-        receipt.items.forEach(item => {
-          if (item.assignedTo.includes(person.name)) {
-            const shareCount = item.assignedTo.length;
-            const shareAmount = item.price / shareCount;
-            personSubtotal += shareAmount;
-
-            personItems.push({
-              name: item.name,
-              amount: shareAmount,
-              percentage: shareCount > 1 ? Math.round(100 / shareCount) : undefined
-            });
-          }
-        });
-
-        if (personItems.length === 0) return;
-
-        let line = `${person.name}: `;
+      receipts.forEach((receipt, receiptIndex) => {
+        summary += `\n[Receipt ${receiptIndex + 1}]\n`;
         
-        personItems.forEach((item, idx) => {
-          if (idx > 0) line += ', ';
-          line += `${item.name} ($${item.amount.toFixed(2)}`;
-          if (item.percentage) {
-            const numPeople = Math.round(100 / item.percentage);
-            const splitText = numPeople === 2 ? 'split between two' : `split among ${numPeople}`;
-            line += ` - ${splitText}`;
+        people.forEach(person => {
+          const personItems: { name: string; amount: number; percentage?: number }[] = [];
+          let personSubtotal = 0;
+
+          receipt.items.forEach(item => {
+            if (item.assignedTo.includes(person.name)) {
+              const shareCount = item.assignedTo.length;
+              const shareAmount = item.price / shareCount;
+              personSubtotal += shareAmount;
+
+              personItems.push({
+                name: item.name,
+                amount: shareAmount,
+                percentage: shareCount > 1 ? Math.round(100 / shareCount) : undefined
+              });
+            }
+          });
+
+          if (personItems.length === 0) return;
+
+          let line = `${person.name}: `;
+          
+          personItems.forEach((item, idx) => {
+            if (idx > 0) line += ', ';
+            line += `${item.name} ($${item.amount.toFixed(2)}`;
+            if (item.percentage) {
+              const numPeople = Math.round(100 / item.percentage);
+              const splitText = numPeople === 2 ? 'split between two' : `split among ${numPeople}`;
+              line += ` - ${splitText}`;
+            }
+            line += ')';
+          });
+
+          let personSc = 0;
+          let personGst = 0;
+
+          if (receipt.serviceChargeEnabled) {
+            personSc = personSubtotal * (receipt.serviceChargePercent / 100);
           }
-          line += ')';
+
+          if (receipt.gstEnabled) {
+            personGst = (personSubtotal + personSc) * (receipt.gstPercent / 100);
+          }
+
+          if (personSc > 0 || personGst > 0) {
+            line += `, SC+GST ($${(personSc + personGst).toFixed(2)})`;
+          }
+
+          const personTotal = personSubtotal + personSc + personGst;
+          line += ` = $${personTotal.toFixed(2)}`;
+          summary += line + '\n';
         });
 
-        let personSc = 0;
-        let personGst = 0;
-
-        if (receipt.serviceChargeEnabled) {
-          personSc = personSubtotal * (receipt.serviceChargePercent / 100);
-        }
-
-        if (receipt.gstEnabled) {
-          personGst = (personSubtotal + personSc) * (receipt.gstPercent / 100);
-        }
-
-        if (personSc > 0 || personGst > 0) {
-          line += `, SC+GST ($${(personSc + personGst).toFixed(2)})`;
-        }
-
-        const personTotal = personSubtotal + personSc + personGst;
-        line += ` = $${personTotal.toFixed(2)}`;
-        summary += line + '\n';
+        summary += `Receipt ${receiptIndex + 1} Total: $${calculateReceiptTotal(receipt).toFixed(2)}\n`;
       });
-
-      summary += `Receipt ${receiptIndex + 1} Total: $${calculateReceiptTotal(receipt).toFixed(2)}\n`;
-    });
+    }
 
     summary += '\n---\nGenerated by Pay How Much Ah, a web app by Manish Nair. Try it out at https://pay-how-much-ah.vercel.app';
     
@@ -630,7 +633,7 @@ export default function App() {
   };
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(generateSummaryText());
+    navigator.clipboard.writeText(generateSummaryText(includeBreakdown));
     tracking.summaryCopied();
     setShowCopyConfirm(true);
     setTimeout(() => setShowCopyConfirm(false), 2000);
@@ -1033,6 +1036,22 @@ export default function App() {
                       <span className="font-medium">{item.name}</span>
                       <span className="text-gray-600">${item.price.toFixed(2)}</span>
                     </div>
+                    <div className="mb-2">
+                      <button
+                        onClick={() => {
+                          // Select all people for this item
+                          const allPeople = people.map(p => p.name);
+                          updateCurrentReceipt({
+                            items: currentReceipt.items.map(i => 
+                              i.id === item.id ? { ...i, assignedTo: allPeople } : i
+                            )
+                          });
+                        }}
+                        className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition"
+                      >
+                        Select All
+                      </button>
+                    </div>
                     <div className="flex flex-wrap gap-2">
                       {people.map(person => (
                         <button
@@ -1102,8 +1121,20 @@ export default function App() {
           {step === 5 && (
             <div className="space-y-6">
               <h2 className="text-2xl font-semibold">Summary</h2>
+              <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
+                <input
+                  type="checkbox"
+                  id="includeBreakdown"
+                  checked={includeBreakdown}
+                  onChange={(e) => setIncludeBreakdown(e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <label htmlFor="includeBreakdown" className="text-sm cursor-pointer">
+                  Include detailed breakdown by receipt
+                </label>
+              </div>
               <div className="bg-gray-50 p-6 rounded-lg font-mono text-sm whitespace-pre-wrap">
-                {generateSummaryText()}
+                {generateSummaryText(includeBreakdown)}
               </div>
               <div className="flex gap-3">
                 <button
