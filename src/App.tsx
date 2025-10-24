@@ -852,46 +852,6 @@ export default function App() {
                     </button>
                   </div>
 
-                  <div>
-                    <h3 className="text-lg font-semibold mb-3">Party Members</h3>
-                    <div className="flex gap-2 mb-3">
-                      <input
-                        type="text"
-                        value={newPersonName}
-                        onChange={(e) => setNewPersonName(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && addPerson()}
-                        placeholder="Name"
-                        className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-gray-900"
-                      />
-                      <button
-                        onClick={addPerson}
-                        className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
-                      >
-                        Add
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {people.map(person => (
-                        <div key={person.name} className="px-3 py-1 bg-gray-100 rounded-full flex items-center gap-2">
-                          <span>{person.name}</span>
-                          {currentReceiptIndex === 0 && (
-                            <button
-                              onClick={() => removePerson(person.name)}
-                              className="text-gray-600 hover:text-red-600"
-                            >
-                              ×
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    {currentReceiptIndex > 0 && (
-                      <p className="text-xs text-gray-500 mt-2">
-                        Original members cannot be removed. You can add new members.
-                      </p>
-                    )}
-                  </div>
-
                   <div className="border-t pt-6">
                     <h3 className="text-lg font-semibold mb-3">Service Charge & GST</h3>
                     <div className="space-y-3">
@@ -960,6 +920,46 @@ export default function App() {
                       <span className="text-sm">{error}</span>
                     </div>
                   )}
+
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3">Party Members</h3>
+                    <div className="flex gap-2 mb-3">
+                      <input
+                        type="text"
+                        value={newPersonName}
+                        onChange={(e) => setNewPersonName(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && addPerson()}
+                        placeholder="Name"
+                        className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-gray-900"
+                      />
+                      <button
+                        onClick={addPerson}
+                        className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {people.map(person => (
+                        <div key={person.name} className="px-3 py-1 bg-gray-100 rounded-full flex items-center gap-2">
+                          <span>{person.name}</span>
+                          {currentReceiptIndex === 0 && (
+                            <button
+                              onClick={() => removePerson(person.name)}
+                              className="text-gray-600 hover:text-red-600"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {currentReceiptIndex > 0 && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        Original members cannot be removed. You can add new members.
+                      </p>
+                    )}
+                  </div>
 
                   <button
                     onClick={() => {
@@ -1039,17 +1039,21 @@ export default function App() {
                     <div className="mb-2">
                       <button
                         onClick={() => {
-                          // Select all people for this item
+                          // Toggle: if all are selected, unselect all; otherwise select all
                           const allPeople = people.map(p => p.name);
+                          const allSelected = allPeople.every(name => item.assignedTo.includes(name));
+                          
                           updateCurrentReceipt({
                             items: currentReceipt.items.map(i => 
-                              i.id === item.id ? { ...i, assignedTo: allPeople } : i
+                              i.id === item.id 
+                                ? { ...i, assignedTo: allSelected ? [] : allPeople } 
+                                : i
                             )
                           });
                         }}
                         className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition"
                       >
-                        Select All
+                        {people.every(p => item.assignedTo.includes(p.name)) ? 'Unselect All' : 'Select All'}
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -1121,6 +1125,9 @@ export default function App() {
           {step === 5 && (
             <div className="space-y-6">
               <h2 className="text-2xl font-semibold">Summary</h2>
+              <div className="bg-gray-50 p-6 rounded-lg font-mono text-sm whitespace-pre-wrap">
+                {generateSummaryText(includeBreakdown)}
+              </div>
               <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
                 <input
                   type="checkbox"
@@ -1132,9 +1139,6 @@ export default function App() {
                 <label htmlFor="includeBreakdown" className="text-sm cursor-pointer">
                   Include detailed breakdown by receipt
                 </label>
-              </div>
-              <div className="bg-gray-50 p-6 rounded-lg font-mono text-sm whitespace-pre-wrap">
-                {generateSummaryText(includeBreakdown)}
               </div>
               <div className="flex gap-3">
                 <button
