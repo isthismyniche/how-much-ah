@@ -1158,7 +1158,7 @@ export default function App() {
                       Copied!
                     </>
                   ) : (
-                    'Copy to Clipboard'
+                    'Copy summary'
                   )}
                 </button>
               </div>
