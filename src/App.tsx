@@ -1212,16 +1212,6 @@ export default function App() {
                   )}
                 </button>
               </div>
-
-              <div className="text-center mt-4">
-                <button
-                  onClick={() => setShowDonationModal(true)}
-                  className="text-sm text-gray-500 hover:text-gray-700 transition"
-                >
-                  ❤️ Support this project
-                </button>
-              </div>
-
             </div>
           )}
         </div>
