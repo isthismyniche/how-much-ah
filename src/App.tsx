@@ -1213,15 +1213,12 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-center">
-                <p className="text-sm text-blue-800 mb-3">
-                  ✨ Did this save you time? Consider supporting the developer!
-                </p>
+              <div className="text-center mt-4">
                 <button
                   onClick={() => setShowDonationModal(true)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm"
+                  className="text-sm text-gray-500 hover:text-gray-700 transition"
                 >
-                  ❤️ Buy me a coffee
+                  ❤️ Support this project
                 </button>
               </div>
 
@@ -1243,7 +1240,7 @@ export default function App() {
               </div>
               
               <p className="text-gray-600 mb-6">
-                This tool is free to use. If it helped you, consider buying me a coffee! ☕
+                This tool is free to use, and is my little gift to the world. If it helped you, consider buying me a coffee! ☕
               </p>
               
               <div className="mb-6">
@@ -1268,10 +1265,18 @@ export default function App() {
                   <span className="text-gray-600">$</span>
                   <input
                     type="number"
-                    value={donationAmount}
-                    onChange={(e) => setDonationAmount(parseFloat(e.target.value) || 0)}
+                    value={donationAmount || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '') {
+                        setDonationAmount(0);
+                      } else {
+                        setDonationAmount(parseFloat(val));
+                      }
+                    }}
                     min="1"
                     step="1"
+                    placeholder="Enter amount"
                     className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-gray-900"
                   />
                 </div>
