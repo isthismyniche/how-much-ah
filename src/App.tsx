@@ -31,7 +31,20 @@ export default function App() {
     initGA();
     tracking.reachedStep(1);
     setStepsVisited(new Set([1]));
+    // Check for donation success/cancel
+    const urlParams = new URLSearchParams(window.location.search);
+    const donation = urlParams.get('donation');
+    
+    if (donation === 'success') {
+      alert('Thank you so much for your support! 🙏');
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (donation === 'cancelled') {
+      // Silently clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   }, [])
+
   const [step, setStep] = useState(1);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [currentReceiptIndex, setCurrentReceiptIndex] = useState(0);
@@ -43,6 +56,10 @@ export default function App() {
   const [showCopyConfirm, setShowCopyConfirm] = useState(false);
   const [includeBreakdown, setIncludeBreakdown] = useState(false); 
   const [stepsVisited, setStepsVisited] = useState<Set<number>>(new Set());
+  const [showDonationModal, setShowDonationModal] = useState(false);
+  const [donationAmount, setDonationAmount] = useState(5);
+  const [donationLoading, setDonationLoading] = useState(false);
+
 
   const setStepWithTracking = (newStep: number) => {
     setStep(newStep);
@@ -652,6 +669,33 @@ export default function App() {
     return `Receipt ${currentReceiptIndex + 1} of ${receipts.length}`;
   };
 
+  const handleDonation = async (amount: number) => {
+    setDonationLoading(true);
+    try {
+      const response = await fetch('/api/create-donation-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ amount }),
+      });
+  
+      const data = await response.json();
+  
+      if (data.url) {
+        // Redirect to Stripe Checkout
+        window.location.href = data.url;
+      } else {
+        alert('Failed to initiate donation. Please try again.');
+        setDonationLoading(false);
+      }
+    } catch (error) {
+      console.error('Donation error:', error);
+      alert('Failed to initiate donation. Please try again.');
+      setDonationLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-2xl mx-auto">
@@ -676,6 +720,12 @@ export default function App() {
             Pay How Much Ah?
           </h1>
           <p className="text-gray-600">Split the cost easily - up to 3 receipts</p>
+          <button
+            onClick={() => setShowDonationModal(true)}
+            className="mt-3 text-sm text-gray-500 hover:text-gray-700 transition"
+          >
+            ❤️ Support this project
+          </button>
         </div>
         
         <div className="flex justify-between mb-8">
@@ -1162,9 +1212,92 @@ export default function App() {
                   )}
                 </button>
               </div>
+
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-center">
+                <p className="text-sm text-blue-800 mb-3">
+                  ✨ Did this save you time? Consider supporting the developer!
+                </p>
+                <button
+                  onClick={() => setShowDonationModal(true)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm"
+                >
+                  ❤️ Buy me a coffee
+                </button>
+              </div>
+
             </div>
           )}
         </div>
+
+        {showDonationModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-semibold">Support Pay How Much Ah</h3>
+                <button
+                  onClick={() => setShowDonationModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <p className="text-gray-600 mb-6">
+                This tool is free to use. If it helped you, consider buying me a coffee! ☕
+              </p>
+              
+              <div className="mb-6">
+                <label className="block text-sm font-medium mb-2">Choose amount (SGD)</label>
+                <div className="grid grid-cols-3 gap-3 mb-3">
+                  {[2, 5, 10].map(amount => (
+                    <button
+                      key={amount}
+                      onClick={() => setDonationAmount(amount)}
+                      className={`py-3 rounded-lg border-2 transition ${
+                        donationAmount === amount
+                          ? 'border-gray-900 bg-gray-50'
+                          : 'border-gray-200 hover:border-gray-400'
+                      }`}
+                    >
+                      ${amount}
+                    </button>
+                  ))}
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-600">$</span>
+                  <input
+                    type="number"
+                    value={donationAmount}
+                    onChange={(e) => setDonationAmount(parseFloat(e.target.value) || 0)}
+                    min="1"
+                    step="1"
+                    className="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-gray-900"
+                  />
+                </div>
+              </div>
+              
+              <button
+                onClick={() => handleDonation(donationAmount)}
+                disabled={donationLoading || donationAmount < 1}
+                className="w-full py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {donationLoading ? (
+                  <>
+                    <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
+                    Processing...
+                  </>
+                ) : (
+                  <>❤️ Donate ${donationAmount.toFixed(2)}</>
+                )}
+              </button>
+              
+              <p className="text-xs text-gray-500 mt-4 text-center">
+                Secured by Stripe · Card & PayNow accepted
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
