@@ -1290,7 +1290,7 @@ export default function App() {
                     Processing...
                   </>
                 ) : (
-                  <>❤️ Donate ${donationAmount.toFixed(2)}</>
+                  <>❤️ Donate ${donationAmount.toFixed(6)}</>
                 )}
               </button>
               
@@ -1340,7 +1340,7 @@ export default function App() {
                       OCR is great at reading text, but it doesn't always understand context—like which price belongs to which item. I wrote custom logic to match them up using their position on the receipt.
                     </p>
                     <p>
-                      The results won't always be perfect. You may need to fix some items or prices, but it's still faster than typing everything manually. Hold your receipt straight and flat for best results.
+                      The results won't always be perfect. You may need to fix some items or prices, but it's still faster than typing everything manually. Hold your receipt straight and flat for the best results.
                     </p>
                     <p>
                       After checking the items, add your group members, select who paid, assign items to people, and generate a payment summary. That's about it!
@@ -1369,7 +1369,7 @@ export default function App() {
                       Want to see how it's built? Check out the code on <a href="https://github.com/isthismyniche" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">GitHub</a>.
                     </p>
                     <p>
-                      And feel welcome to introduce yourself and connect with me on <a href="https://www.linkedin.com/in/manishnair92/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">LinkedIn</a>.
+                      Connect with me on <a href="https://www.linkedin.com/in/manishnair92/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">LinkedIn</a>.
                     </p>
                   </div>
                   <div className="pt-4 mt-4 border-t border-gray-200">
