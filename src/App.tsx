@@ -59,7 +59,7 @@ export default function App() {
   const [showDonationModal, setShowDonationModal] = useState(false);
   const [donationAmount, setDonationAmount] = useState(5);
   const [donationLoading, setDonationLoading] = useState(false);
-
+  const [showAboutModal, setShowAboutModal] = useState(false);
 
   const setStepWithTracking = (newStep: number) => {
     setStep(newStep);
@@ -726,6 +726,13 @@ export default function App() {
           >
             ❤️ Support this project
           </button>
+          <span className="text-gray-300">•</span>
+          <button
+            onClick={() => setShowAboutModal(true)}
+            className="text-sm text-gray-500 hover:text-gray-700 transition"
+          >
+            About
+          </button>
         </div>
         
         <div className="flex justify-between mb-8">
@@ -1290,6 +1297,86 @@ export default function App() {
               <p className="text-xs text-gray-500 mt-4 text-center">
                 Secured by Stripe · Card & PayNow accepted
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* About Modal*/}
+        {showAboutModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+            <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full my-8">
+              <div className="sticky top-0 bg-white rounded-t-xl border-b border-gray-200 p-6 flex justify-between items-center">
+                <h3 className="text-2xl font-semibold">About Pay How Much Ah</h3>
+                <button
+                  onClick={() => setShowAboutModal(false)}
+                  className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+                >
+                  ×
+                </button>
+              </div>
+              
+              <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+                {/* Why I Built This */}
+                <div>
+                  <h4 className="text-lg font-semibold mb-3">Why I Built This</h4>
+                  <div className="text-gray-700 leading-relaxed space-y-3">
+                    <p>
+                      Splitting a receipt evenly is easy. But when you want to split by exact items? The math gets messy fast—especially with GST and service charge.
+                    </p>
+                    <p>
+                      I got tired of building spreadsheets every time my friends and I went out. So I built this app to solve my own problem. I hope it helps you too.
+                    </p>
+                  </div>
+                </div>
+
+                {/* How It Works */}
+                <div>
+                  <h4 className="text-lg font-semibold mb-3">How It Works</h4>
+                  <div className="text-gray-700 leading-relaxed space-y-3">
+                    <p>
+                      This app uses <strong>Google Cloud Vision's</strong> Optical Character Recognition (OCR) to read your receipt and extract items and prices automatically.
+                    </p>
+                    <p>
+                      OCR is great at reading text, but it doesn't always understand context—like which price belongs to which item. I wrote custom logic to match them up using their position on the receipt.
+                    </p>
+                    <p>
+                      The results won't always be perfect. You may need to fix some items or prices, but it's still faster than typing everything manually. Hold your receipt straight and flat for best results.
+                    </p>
+                    <p>
+                      After checking the items, add your group members, select who paid, assign items to people, and generate a payment summary. 
+                    </p>
+                  </div>
+                </div>
+
+                {/* Reach Out */}
+                <div>
+                  <h4 className="text-lg font-semibold mb-3">Reach Out</h4>
+                  <div className="text-gray-700 leading-relaxed space-y-3">
+                    <p>
+                      I hope this saved you time! If it did, please consider{' '}
+                      <button
+                        onClick={() => {
+                          setShowAboutModal(false);
+                          setShowDonationModal(true);
+                        }}
+                        className="text-blue-600 hover:text-blue-800 underline"
+                      >
+                        supporting this project
+                      </button>
+                      .
+                    </p>
+                    <p>
+                      Want to see how it's built? Check out the code on <a href="https://github.com/isthismyniche" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">GitHub</a>.
+                    </p>
+                  </div>
+                  <div className="pt-4 mt-4 border-t border-gray-200">
+                    <p className="text-sm text-gray-500">
+                      — Manish<br/>
+                      Last updated: November 2025
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
