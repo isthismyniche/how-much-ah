@@ -1243,7 +1243,7 @@ export default function App() {
               <div className="mb-6">
                 <label className="block text-sm font-medium mb-2">Choose amount (SGD)</label>
                 <div className="grid grid-cols-3 gap-3 mb-3">
-                  {[2, 5, 10].map(amount => (
+                  {[3, 6, 12].map(amount => (
                     <button
                       key={amount}
                       onClick={() => setDonationAmount(amount)}
@@ -1324,7 +1324,7 @@ export default function App() {
                       Splitting a receipt evenly is easy. But when you want to split by exact items? The math gets messy fast—especially with GST and service charge.
                     </p>
                     <p>
-                      I got tired of building spreadsheets every time my friends and I went out. So I built this app to solve my own problem. I hope it helps you too.
+                      I got tired of building spreadsheets every time my friends and I went out. So I built this app to make things easier - for myself, and anyone else who faces the same problem.
                     </p>
                   </div>
                 </div>
@@ -1343,7 +1343,7 @@ export default function App() {
                       The results won't always be perfect. You may need to fix some items or prices, but it's still faster than typing everything manually. Hold your receipt straight and flat for best results.
                     </p>
                     <p>
-                      After checking the items, add your group members, select who paid, assign items to people, and generate a payment summary. 
+                      After checking the items, add your group members, select who paid, assign items to people, and generate a payment summary. That's about it!
                     </p>
                   </div>
                 </div>
@@ -1367,6 +1367,9 @@ export default function App() {
                     </p>
                     <p>
                       Want to see how it's built? Check out the code on <a href="https://github.com/isthismyniche" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">GitHub</a>.
+                    </p>
+                    <p>
+                      And feel welcome to introduce yourself and connect with me on <a href="https://www.linkedin.com/in/manishnair92/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 underline">LinkedIn</a>.
                     </p>
                   </div>
                   <div className="pt-4 mt-4 border-t border-gray-200">
