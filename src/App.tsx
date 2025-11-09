@@ -57,7 +57,7 @@ export default function App() {
   const [includeBreakdown, setIncludeBreakdown] = useState(false); 
   const [stepsVisited, setStepsVisited] = useState<Set<number>>(new Set());
   const [showDonationModal, setShowDonationModal] = useState(false);
-  const [donationAmount, setDonationAmount] = useState(5);
+  const [donationAmount, setDonationAmount] = useState(6);
   const [donationLoading, setDonationLoading] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
 
@@ -1290,7 +1290,7 @@ export default function App() {
                     Processing...
                   </>
                 ) : (
-                  <>❤️ Donate ${donationAmount.toFixed(6)}</>
+                  <>❤️ Donate ${donationAmount.toFixed(2)}</>
                 )}
               </button>
               
