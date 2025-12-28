@@ -926,8 +926,11 @@ export default function App() {
                         <label htmlFor="sc" className="flex-1">Service Charge</label>
                         <input
                           type="number"
-                          value={currentReceipt.serviceChargePercent}
-                          onChange={(e) => updateCurrentReceipt({ serviceChargePercent: parseFloat(e.target.value) || 0 })}
+                          value={currentReceipt.serviceChargePercent === 0 ? '' : currentReceipt.serviceChargePercent}
+                          onChange={(e) => {
+                            const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                            updateCurrentReceipt({ serviceChargePercent: isNaN(value) ? 0 : value });
+                          }}
                           disabled={!currentReceipt.serviceChargeEnabled}
                           className="w-20 px-3 py-1 border rounded-lg disabled:bg-gray-100"
                         />
@@ -947,8 +950,11 @@ export default function App() {
                         <label htmlFor="gst" className="flex-1">GST</label>
                         <input
                           type="number"
-                          value={currentReceipt.gstPercent}
-                          onChange={(e) => updateCurrentReceipt({ gstPercent: parseFloat(e.target.value) || 0 })}
+                          value={currentReceipt.gstPercent === 0 ? '' : currentReceipt.gstPercent}
+                          onChange={(e) => {
+                            const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                            updateCurrentReceipt({ gstPercent: isNaN(value) ? 0 : value });
+                          }}
                           disabled={!currentReceipt.gstEnabled}
                           className="w-20 px-3 py-1 border rounded-lg disabled:bg-gray-100"
                         />
